@@ -670,7 +670,7 @@ describe("preemptive-compaction", () => {
     expect(ctx.client.session.summarize).toHaveBeenCalled()
   })
 
-  it("should ignore stale cached Anthropic limits for older models", async () => {
+  it("should respect cached Anthropic limits for older models", async () => {
     const modelContextLimitsCache = new Map<string, number>()
     modelContextLimitsCache.set("anthropic/claude-sonnet-4-5", 500000)
 
@@ -706,6 +706,6 @@ describe("preemptive-compaction", () => {
       { title: "", output: "test", metadata: null }
     )
 
-    expect(ctx.client.session.summarize).toHaveBeenCalled()
+    expect(ctx.client.session.summarize).not.toHaveBeenCalled()
   })
 })
