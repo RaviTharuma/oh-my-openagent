@@ -1,17 +1,9 @@
 import process from "node:process"
-import { afterAll, afterEach, describe, expect, it, mock } from "bun:test"
+import { afterEach, describe, expect, it, mock } from "bun:test"
 
 const getModelCapabilitiesMock = mock(() => ({
   contextWindowTokens: undefined as number | undefined,
 }))
-
-mock.module("./model-capabilities", () => ({
-  getModelCapabilities: getModelCapabilitiesMock,
-}))
-
-afterAll(() => {
-  mock.restore()
-})
 
 const { resolveActualContextLimit } = await import("./context-limit-resolver")
 
@@ -42,6 +34,7 @@ describe("resolveActualContextLimit", () => {
     getModelCapabilitiesMock.mockImplementation(() => ({
       contextWindowTokens: undefined,
     }))
+    mock.restore()
   })
 
   it("returns cached limit for Anthropic 4.6 models when 1M mode is disabled (GA support)", () => {
@@ -55,7 +48,7 @@ describe("resolveActualContextLimit", () => {
     const actualLimit = resolveActualContextLimit("anthropic", "claude-opus-4-6", {
       anthropicContext1MEnabled: false,
       modelContextLimitsCache,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
     // then — models.dev reports 1M for GA models, resolver should respect it
     expect(actualLimit).toBe(1_000_000)
@@ -72,13 +65,13 @@ describe("resolveActualContextLimit", () => {
     const actualLimit = resolveActualContextLimit("anthropic", "claude-sonnet-4-5", {
       anthropicContext1MEnabled: false,
       modelContextLimitsCache,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
     // then
     expect(actualLimit).toBe(500_000)
   })
 
-  it("returns default 200K for Anthropic models without cached limit and 1M mode disabled", () => {
+  it("returns null when neither cache nor metadata can resolve an Anthropic limit", () => {
     // given
     delete process.env[ANTHROPIC_CONTEXT_ENV_KEY]
     delete process.env[VERTEX_CONTEXT_ENV_KEY]
@@ -86,10 +79,10 @@ describe("resolveActualContextLimit", () => {
     // when
     const actualLimit = resolveActualContextLimit("anthropic", "claude-sonnet-4-5", {
       anthropicContext1MEnabled: false,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
     // then
-    expect(actualLimit).toBe(200_000)
+    expect(actualLimit).toBeNull()
   })
 
   it("uses dynamically discovered limits when cache is empty", () => {
@@ -106,13 +99,13 @@ describe("resolveActualContextLimit", () => {
     // when
     const actualLimit = resolveActualContextLimit("openai", "gpt-5.4", {
       anthropicContext1MEnabled: false,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
     // then
     expect(actualLimit).toBe(1_050_000)
   })
 
-  it("uses dynamically discovered Anthropic limits before falling back to the 200K default", () => {
+  it("uses dynamically discovered Anthropic limits before giving up on unknown limits", () => {
     // given
     delete process.env[ANTHROPIC_CONTEXT_ENV_KEY]
     delete process.env[VERTEX_CONTEXT_ENV_KEY]
@@ -126,7 +119,7 @@ describe("resolveActualContextLimit", () => {
     // when
     const actualLimit = resolveActualContextLimit("anthropic", "claude-sonnet-4-5", {
       anthropicContext1MEnabled: false,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
     // then
     expect(actualLimit).toBe(500_000)
@@ -143,15 +136,31 @@ describe("resolveActualContextLimit", () => {
     const actualLimit = resolveActualContextLimit("anthropic", "claude-sonnet-4-5", {
       anthropicContext1MEnabled: true,
       modelContextLimitsCache,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
-    // then — explicit 1M flag overrides cached 200K
+    // then — explicit 1M flag overrides the narrower cached limit
     expect(actualLimit).toBe(1_000_000)
   })
 
-  it("treats Anthropics aliases as Anthropic providers", () => {
+  it("uses provider-level minimum limits without hardcoding model IDs", () => {
     // given
     delete process.env[ANTHROPIC_CONTEXT_ENV_KEY]
+    delete process.env[VERTEX_CONTEXT_ENV_KEY]
+    const providerContextLimitMinimumsCache = new Map<string, number>()
+    providerContextLimitMinimumsCache.set("custom-proxy", 750_000)
+
+    // when
+    const actualLimit = resolveActualContextLimit("custom-proxy", "whatever-latest", {
+      providerContextLimitMinimumsCache,
+    }, { getModelCapabilities: getModelCapabilitiesMock })
+
+    // then
+    expect(actualLimit).toBe(750_000)
+  })
+
+  it("keeps legacy Anthropic provider aliases compatible with explicit 1M mode", () => {
+    // given
+    process.env[ANTHROPIC_CONTEXT_ENV_KEY] = "true"
     delete process.env[VERTEX_CONTEXT_ENV_KEY]
 
     // when
@@ -159,10 +168,11 @@ describe("resolveActualContextLimit", () => {
       "aws-bedrock-anthropic",
       "claude-sonnet-4-5",
       { anthropicContext1MEnabled: false },
+      { getModelCapabilities: getModelCapabilitiesMock },
     )
 
     // then
-    expect(actualLimit).toBe(200000)
+    expect(actualLimit).toBe(1_000_000)
   })
 
   it("supports Anthropic 4.6 dot-version model IDs without explicit 1M mode", () => {
@@ -176,7 +186,7 @@ describe("resolveActualContextLimit", () => {
     const actualLimit = resolveActualContextLimit("anthropic", "claude-opus-4.6", {
       anthropicContext1MEnabled: false,
       modelContextLimitsCache,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
     // then
     expect(actualLimit).toBe(1_000_000)
@@ -194,11 +204,11 @@ describe("resolveActualContextLimit", () => {
     const opusLimit = resolveActualContextLimit("anthropic", "claude-opus", {
       anthropicContext1MEnabled: false,
       modelContextLimitsCache,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
     const sonnetLimit = resolveActualContextLimit("anthropic", "claude-sonnet", {
       anthropicContext1MEnabled: false,
       modelContextLimitsCache,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
     // then
     expect(opusLimit).toBe(1_000_000)
@@ -216,7 +226,7 @@ describe("resolveActualContextLimit", () => {
     const actualLimit = resolveActualContextLimit("anthropic", "claude-sonnet-4-6-high", {
       anthropicContext1MEnabled: false,
       modelContextLimitsCache,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
     // then
     expect(actualLimit).toBe(500_000)
@@ -233,7 +243,7 @@ describe("resolveActualContextLimit", () => {
     const actualLimit = resolveActualContextLimit("anthropic", "claude-sonnet-4-5-high", {
       anthropicContext1MEnabled: false,
       modelContextLimitsCache,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
     // then
     expect(actualLimit).toBe(500_000)
@@ -247,7 +257,7 @@ describe("resolveActualContextLimit", () => {
     // when
     const actualLimit = resolveActualContextLimit("openai", "gpt-5", {
       anthropicContext1MEnabled: false,
-    })
+    }, { getModelCapabilities: getModelCapabilitiesMock })
 
     // then
     expect(actualLimit).toBeNull()
