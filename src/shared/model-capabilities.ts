@@ -36,6 +36,7 @@ export type ModelCapabilities = {
   supportsThinking?: boolean
   supportsTemperature?: boolean
   supportsTopP?: boolean
+  contextWindowTokens?: number
   maxOutputTokens?: number
   toolCall?: boolean
   modalities?: {
@@ -88,6 +89,7 @@ export type ModelCapabilitiesDiagnostics = {
   supportsThinking: { source: "runtime" | "override" | "heuristic" | "runtime-snapshot" | "bundled-snapshot" | "none" }
   supportsTemperature: { source: "runtime" | "override" | "runtime-snapshot" | "bundled-snapshot" | "none" }
   supportsTopP: { source: "runtime" | "override" | "none" }
+  contextWindowTokens: { source: "runtime" | "runtime-snapshot" | "bundled-snapshot" | "none" }
   maxOutputTokens: { source: "runtime" | "runtime-snapshot" | "bundled-snapshot" | "none" }
   toolCall: { source: "runtime" | "runtime-snapshot" | "bundled-snapshot" | "none" }
   modalities: { source: "runtime" | "runtime-snapshot" | "bundled-snapshot" | "none" }
@@ -181,19 +183,36 @@ function readRuntimeModelCapabilities(runtimeModel: Record<string, unknown> | un
   return isRecord(runtimeModel?.capabilities) ? runtimeModel.capabilities : undefined
 }
 
-function readRuntimeModelLimitOutput(runtimeModel: Record<string, unknown> | undefined): number | undefined {
+function readRuntimeModelLimitValue(
+  runtimeModel: Record<string, unknown> | undefined,
+  key: "context" | "output",
+): number | undefined {
   if (!runtimeModel) {
     return undefined
   }
 
+  const rootValue = readNumber(runtimeModel[key])
+  if (rootValue !== undefined) {
+    return rootValue
+  }
+
+  const runtimeCapabilities = readRuntimeModelCapabilities(runtimeModel)
   const limit = isRecord(runtimeModel.limit)
     ? runtimeModel.limit
-    : readRuntimeModelCapabilities(runtimeModel)?.limit
+    : runtimeCapabilities?.limit
   if (!isRecord(limit)) {
     return undefined
   }
 
-  return readNumber(limit.output)
+  return readNumber(limit[key])
+}
+
+function readRuntimeModelLimitContext(runtimeModel: Record<string, unknown> | undefined): number | undefined {
+  return readRuntimeModelLimitValue(runtimeModel, "context")
+}
+
+function readRuntimeModelLimitOutput(runtimeModel: Record<string, unknown> | undefined): number | undefined {
+  return readRuntimeModelLimitValue(runtimeModel, "output")
 }
 
 function readRuntimeModelBoolean(runtimeModel: Record<string, unknown> | undefined, keys: string[]): boolean | undefined {
@@ -385,6 +404,12 @@ export function getModelCapabilities(input: GetModelCapabilitiesInput): ModelCap
       : override?.supportsTopP !== undefined
       ? "override"
       : "none"
+  const contextWindowTokensSource: ModelCapabilitiesDiagnostics["contextWindowTokens"]["source"] =
+    readRuntimeModelLimitContext(runtimeModel) !== undefined
+      ? "runtime"
+      : snapshotEntry?.limit?.context !== undefined
+      ? snapshotSource
+      : "none"
   const maxOutputTokensSource: ModelCapabilitiesDiagnostics["maxOutputTokens"]["source"] =
     readRuntimeModelLimitOutput(runtimeModel) !== undefined
       ? "runtime"
@@ -431,6 +456,9 @@ export function getModelCapabilities(input: GetModelCapabilitiesInput): ModelCap
     supportsTopP:
       readRuntimeModelTopPSupport(runtimeModel)
       ?? override?.supportsTopP,
+    contextWindowTokens:
+      readRuntimeModelLimitContext(runtimeModel)
+      ?? snapshotEntry?.limit?.context,
     maxOutputTokens:
       readRuntimeModelLimitOutput(runtimeModel)
       ?? snapshotEntry?.limit?.output,
@@ -454,6 +482,7 @@ export function getModelCapabilities(input: GetModelCapabilitiesInput): ModelCap
       supportsThinking: { source: supportsThinkingSource },
       supportsTemperature: { source: supportsTemperatureSource },
       supportsTopP: { source: supportsTopPSource },
+      contextWindowTokens: { source: contextWindowTokensSource },
       maxOutputTokens: { source: maxOutputTokensSource },
       toolCall: { source: toolCallSource },
       modalities: { source: modalitiesSource },

@@ -136,7 +136,7 @@ describe("preemptive-compaction", () => {
     const hook = createPreemptiveCompactionHook(ctx as never, {} as never)
     const sessionID = "ses_high"
 
-    // 170K input + 10K cache = 180K → 90% of 200K
+    // 800K input + 10K cache = 811K → above the 78% preemptive threshold of a 1M window
     await hook.event({
       event: {
         type: "message.updated",
@@ -148,7 +148,7 @@ describe("preemptive-compaction", () => {
             modelID: "claude-sonnet-4-6",
             finish: true,
             tokens: {
-              input: 170000,
+              input: 800000,
               output: 1000,
               reasoning: 0,
               cache: { read: 10000, write: 0 },
@@ -184,7 +184,7 @@ describe("preemptive-compaction", () => {
             modelID: "claude-sonnet-4-6",
             finish: true,
             tokens: {
-              input: 170000,
+              input: 800000,
               output: 1000,
               reasoning: 0,
               cache: { read: 10000, write: 0 },
@@ -261,7 +261,7 @@ describe("preemptive-compaction", () => {
             modelID: "claude-sonnet-4-6",
             finish: true,
             tokens: {
-              input: 170000,
+              input: 800000,
               output: 0,
               reasoning: 0,
               cache: { read: 10000, write: 0 },
@@ -304,7 +304,7 @@ describe("preemptive-compaction", () => {
             modelID: "claude-sonnet-4-6",
             finish: true,
             tokens: {
-              input: 170000,
+              input: 800000,
               output: 0,
               reasoning: 0,
               cache: { read: 10000, write: 0 },
@@ -333,7 +333,7 @@ describe("preemptive-compaction", () => {
             modelID: "claude-sonnet-4-6",
             finish: true,
             tokens: {
-              input: 170000,
+              input: 800000,
               output: 0,
               reasoning: 0,
               cache: { read: 10000, write: 0 },
@@ -451,7 +451,7 @@ describe("preemptive-compaction", () => {
               modelID: "claude-sonnet-4-6",
               finish: true,
               tokens: {
-                input: 170000,
+                input: 800000,
                 output: 0,
                 reasoning: 0,
                 cache: { read: 10000, write: 0 },
@@ -489,7 +489,7 @@ describe("preemptive-compaction", () => {
                 modelID: "claude-sonnet-4-6",
                 finish: true,
                 tokens: {
-                  input: 170000,
+                  input: 800000,
                   output: 0,
                   reasoning: 0,
                   cache: { read: 10000, write: 0 },
@@ -533,7 +533,7 @@ describe("preemptive-compaction", () => {
             modelID: "claude-sonnet-4-6",
             finish: true,
             tokens: {
-              input: 170000,
+              input: 800000,
               output: 0,
               reasoning: 0,
               cache: { read: 10000, write: 0 },
@@ -564,7 +564,7 @@ describe("preemptive-compaction", () => {
             modelID: "claude-sonnet-4-6",
             finish: true,
             tokens: {
-              input: 170000,
+              input: 800000,
               output: 0,
               reasoning: 0,
               cache: { read: 10000, write: 0 },
