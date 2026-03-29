@@ -8,6 +8,8 @@ import { MIN_IDLE_TIME_MS } from "./constants"
 import { BackgroundManager } from "./manager"
 import { ConcurrencyManager } from "./concurrency"
 import { initTaskToastManager, _resetTaskToastManagerForTesting } from "../task-toast-manager/manager"
+import * as shared from "../../shared"
+import { transformModelForProvider } from "../../shared/provider-model-id-transform"
 
 
 const TASK_TTL_MS = 30 * 60 * 1000
@@ -3827,6 +3829,15 @@ describe("BackgroundManager.handleEvent - session.error", () => {
     { providers: ["anthropic"], model: "claude-opus-4-6", variant: "max" },
     { providers: ["anthropic"], model: "gpt-5.3-codex", variant: "high" },
   ]
+  let readProviderModelsSpy: ReturnType<typeof spyOn> | undefined
+
+  beforeEach(() => {
+    readProviderModelsSpy = spyOn(shared, "readProviderModelsCache").mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    readProviderModelsSpy?.mockRestore()
+  })
 
   const stubProcessKey = (manager: BackgroundManager) => {
     ;(manager as unknown as { processKey: (key: string) => Promise<void> }).processKey = async () => {}
@@ -4030,7 +4041,7 @@ describe("BackgroundManager.handleEvent - session.error", () => {
     expect(task.attemptCount).toBe(1)
     expect(task.model).toEqual({
       providerID: "anthropic",
-      modelID: "claude-opus-4-6",
+      modelID: transformModelForProvider("anthropic", "claude-opus-4-6"),
       variant: "max",
     })
     expect(task.concurrencyKey).toBeUndefined()
@@ -4068,7 +4079,7 @@ describe("BackgroundManager.handleEvent - session.error", () => {
     expect(task.attemptCount).toBe(1)
     expect(task.model).toEqual({
       providerID: "anthropic",
-      modelID: "claude-opus-4-6",
+      modelID: transformModelForProvider("anthropic", "claude-opus-4-6"),
       variant: "max",
     })
 
@@ -4113,7 +4124,7 @@ describe("BackgroundManager.handleEvent - session.error", () => {
     expect(task.attemptCount).toBe(1)
     expect(task.model).toEqual({
       providerID: "anthropic",
-      modelID: "claude-opus-4-6",
+      modelID: transformModelForProvider("anthropic", "claude-opus-4-6"),
       variant: "max",
     })
 

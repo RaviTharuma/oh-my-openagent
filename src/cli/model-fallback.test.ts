@@ -1,7 +1,18 @@
-import { describe, expect, test } from "bun:test"
-
-import { generateModelConfig } from "./model-fallback"
 import type { InstallConfig } from "./types"
+declare const require: (name: string) => any
+const { beforeAll, describe, expect, mock, test } = require("bun:test")
+
+// Keep these snapshots deterministic: config generation should be validated
+// against the bundled metadata path, not whatever happens to be cached locally.
+mock.module("../shared/connected-providers-cache", () => ({
+  readProviderModelsCache: () => null,
+}))
+
+let generateModelConfig: (config: InstallConfig) => ReturnType<typeof import("./model-fallback")["generateModelConfig"]>
+
+beforeAll(async () => {
+  ;({ generateModelConfig } = await import("./model-fallback"))
+})
 
 function createConfig(overrides: Partial<InstallConfig> = {}): InstallConfig {
   return {
@@ -330,8 +341,8 @@ describe("generateModelConfig", () => {
       // #when generateModelConfig is called
       const result = generateModelConfig(config)
 
-      // #then explore should use claude-haiku-4-5
-      expect(result.agents?.explore?.model).toBe("anthropic/claude-haiku-4-5")
+      // #then explore should use Anthropic's bundled 4.5 identifier
+      expect(result.agents?.explore?.model).toBe("anthropic/claude-haiku-4.5")
     })
 
     test("explore uses Claude haiku regardless of isMax20 flag", () => {
@@ -341,8 +352,8 @@ describe("generateModelConfig", () => {
       // #when generateModelConfig is called
       const result = generateModelConfig(config)
 
-      // #then explore should use claude-haiku-4-5 (isMax20 doesn't affect explore)
-      expect(result.agents?.explore?.model).toBe("anthropic/claude-haiku-4-5")
+      // #then explore should use Anthropic's bundled 4.5 identifier (isMax20 doesn't affect explore)
+      expect(result.agents?.explore?.model).toBe("anthropic/claude-haiku-4.5")
     })
 
     test("explore uses OpenAI model when only OpenAI available", () => {
@@ -378,7 +389,7 @@ describe("generateModelConfig", () => {
       const result = generateModelConfig(config)
 
       // #then
-      expect(result.agents?.sisyphus?.model).toBe("anthropic/claude-opus-4-6")
+      expect(result.agents?.sisyphus?.model).toBe("anthropic/claude-opus-4.6")
     })
 
     test("Sisyphus is created when multiple fallback providers are available", () => {
@@ -395,7 +406,7 @@ describe("generateModelConfig", () => {
       const result = generateModelConfig(config)
 
       // #then
-      expect(result.agents?.sisyphus?.model).toBe("anthropic/claude-opus-4-6")
+      expect(result.agents?.sisyphus?.model).toBe("anthropic/claude-opus-4.6")
     })
 
     test("Sisyphus resolves to gpt-5.4 medium when only OpenAI is available", () => {

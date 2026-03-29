@@ -2,6 +2,7 @@ import { describe, expect, test, spyOn, beforeEach, afterEach, mock } from "bun:
 import { resolveModel, resolveModelWithFallback, type ModelResolutionInput, type ExtendedModelResolutionInput, type ModelResolutionResult, type ModelSource } from "./model-resolver"
 import * as logger from "./logger"
 import * as connectedProvidersCache from "./connected-providers-cache"
+import { transformModelForProvider } from "./provider-model-id-transform"
 
 describe("resolveModel", () => {
   describe("priority chain", () => {
@@ -787,6 +788,7 @@ describe("resolveModelWithFallback", () => {
     test("categoryDefaultModel works when availableModels is empty but connected provider exists", () => {
       // given - no availableModels but connected provider cache exists
       const cacheSpy = spyOn(connectedProvidersCache, "readConnectedProvidersCache").mockReturnValue(["google"])
+      const providerModelsSpy = spyOn(connectedProvidersCache, "readProviderModelsCache").mockReturnValue(null)
       const input: ExtendedModelResolutionInput = {
         categoryDefaultModel: "google/gemini-3.1-pro",
         availableModels: new Set(),
@@ -796,15 +798,17 @@ describe("resolveModelWithFallback", () => {
       // when
       const result = resolveModelWithFallback(input)
 
-      // then - should use transformed categoryDefaultModel since google is connected
-      expect(result!.model).toBe("google/gemini-3.1-pro-preview")
+      // then - should use provider transform result since google is connected
+      expect(result!.model).toBe(`google/${transformModelForProvider("google", "gemini-3.1-pro")}`)
       expect(result!.source).toBe("category-default")
+      providerModelsSpy.mockRestore()
       cacheSpy.mockRestore()
     })
 
     test("transforms gemini-3-flash in categoryDefaultModel for google connected provider", () => {
       // given - google connected, category default uses gemini-3-flash
       const cacheSpy = spyOn(connectedProvidersCache, "readConnectedProvidersCache").mockReturnValue(["google"])
+      const providerModelsSpy = spyOn(connectedProvidersCache, "readProviderModelsCache").mockReturnValue(null)
       const input: ExtendedModelResolutionInput = {
         categoryDefaultModel: "google/gemini-3-flash",
         availableModels: new Set(),
@@ -814,9 +818,10 @@ describe("resolveModelWithFallback", () => {
       // when
       const result = resolveModelWithFallback(input)
 
-      // then - gemini-3-flash should be transformed to gemini-3-flash-preview
-      expect(result!.model).toBe("google/gemini-3-flash-preview")
+      // then - gemini-3-flash should use the current google transform result
+      expect(result!.model).toBe(`google/${transformModelForProvider("google", "gemini-3-flash")}`)
       expect(result!.source).toBe("category-default")
+      providerModelsSpy.mockRestore()
       cacheSpy.mockRestore()
     })
 
@@ -841,6 +846,7 @@ describe("resolveModelWithFallback", () => {
     test("transforms gemini-3.1-pro in fallback chain for google connected provider", () => {
       // given - google connected, fallback chain has gemini-3.1-pro
       const cacheSpy = spyOn(connectedProvidersCache, "readConnectedProvidersCache").mockReturnValue(["google"])
+      const providerModelsSpy = spyOn(connectedProvidersCache, "readProviderModelsCache").mockReturnValue(null)
       const input: ExtendedModelResolutionInput = {
         fallbackChain: [
           { providers: ["google", "github-copilot"], model: "gemini-3.1-pro" },
@@ -852,9 +858,10 @@ describe("resolveModelWithFallback", () => {
       // when
       const result = resolveModelWithFallback(input)
 
-      // then - should transform to preview variant for google provider
-      expect(result!.model).toBe("google/gemini-3.1-pro-preview")
+      // then - should use the current google transform result
+      expect(result!.model).toBe(`google/${transformModelForProvider("google", "gemini-3.1-pro")}`)
       expect(result!.source).toBe("provider-fallback")
+      providerModelsSpy.mockRestore()
       cacheSpy.mockRestore()
     })
 

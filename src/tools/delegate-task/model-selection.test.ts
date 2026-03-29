@@ -2,6 +2,7 @@ declare const require: (name: string) => any
 const { afterEach, beforeEach, describe, expect, mock, spyOn, test } = require("bun:test")
 import { resolveModelForDelegateTask } from "./model-selection"
 import * as connectedProvidersCache from "../../shared/connected-providers-cache"
+import { transformModelForProvider } from "../../shared/provider-model-id-transform"
 
 describe("resolveModelForDelegateTask", () => {
 	let hasConnectedProvidersSpy: ReturnType<typeof spyOn> | undefined
@@ -186,6 +187,7 @@ describe("resolveModelForDelegateTask", () => {
 		describe("#when availableModels is empty and fallback chain starts with unauthenticated provider", () => {
 			test("#then skips unauthenticated providers and resolves to first connected one", () => {
 				readConnectedProvidersSpy = spyOn(connectedProvidersCache, "readConnectedProvidersCache").mockReturnValue(["openai", "anthropic"])
+				const readProviderModelsSpy = spyOn(connectedProvidersCache, "readProviderModelsCache").mockReturnValue(null)
 
 				const result = resolveModelForDelegateTask({
 					fallbackChain: [
@@ -200,7 +202,8 @@ describe("resolveModelForDelegateTask", () => {
 				expect(result).toBeDefined()
 				expect(result).not.toHaveProperty("skipped")
 				const resolved = result as { model: string; variant?: string }
-				expect(resolved.model).toBe("anthropic/claude-haiku-4-5")
+				expect(resolved.model).toBe(`anthropic/${transformModelForProvider("anthropic", "claude-haiku-4-5")}`)
+				readProviderModelsSpy.mockRestore()
 			})
 
 			test("#then resolves first provider in entry that is connected", () => {

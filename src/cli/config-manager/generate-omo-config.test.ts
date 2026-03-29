@@ -1,12 +1,24 @@
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 
 import { generateOmoConfig } from "../config-manager"
 import type { InstallConfig } from "../types"
+import * as connectedProvidersCache from "../../shared/connected-providers-cache"
+import { transformModelForProvider } from "../../shared/provider-model-id-transform"
 
 describe("generateOmoConfig - model fallback system", () => {
-  test("uses github-copilot sonnet fallback when only copilot available", () => {
+  let providerModelsSpy: ReturnType<typeof spyOn>
+
+  beforeEach(() => {
+    providerModelsSpy = spyOn(connectedProvidersCache, "readProviderModelsCache").mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    providerModelsSpy.mockRestore()
+  })
+
+  test("uses github-copilot Claude fallback when only copilot available", () => {
     //#given
     const config: InstallConfig = {
       hasClaude: false,
@@ -24,10 +36,8 @@ describe("generateOmoConfig - model fallback system", () => {
     const result = generateOmoConfig(config)
 
     //#then
-    expect([
-      "github-copilot/claude-opus-4.6",
-      "github-copilot/claude-opus-4-6",
-    ]).toContain((result.agents as Record<string, { model: string }>).sisyphus.model)
+    expect((result.agents as Record<string, { model: string }>).sisyphus.model)
+      .toBe(`github-copilot/${transformModelForProvider("github-copilot", "claude-opus")}`)
   })
 
   test("uses ultimate fallback when no providers configured", () => {
@@ -71,7 +81,8 @@ describe("generateOmoConfig - model fallback system", () => {
 
     //#then
     expect((result.agents as Record<string, { model: string }>).librarian.model).toBe("zai-coding-plan/glm-4.7")
-    expect((result.agents as Record<string, { model: string }>).sisyphus.model).toBe("anthropic/claude-opus-4-6")
+    expect((result.agents as Record<string, { model: string }>).sisyphus.model)
+      .toBe(`anthropic/${transformModelForProvider("anthropic", "claude-opus")}`)
   })
 
   test("uses native OpenAI models when only ChatGPT available", () => {
@@ -116,7 +127,8 @@ describe("generateOmoConfig - model fallback system", () => {
     const result = generateOmoConfig(config)
 
     //#then
-    expect((result.agents as Record<string, { model: string }>).explore.model).toBe("anthropic/claude-haiku-4-5")
+    expect((result.agents as Record<string, { model: string }>).explore.model)
+      .toBe(`anthropic/${transformModelForProvider("anthropic", "claude-haiku")}`)
   })
 
   test("uses haiku for explore regardless of max20 flag", () => {
@@ -137,6 +149,7 @@ describe("generateOmoConfig - model fallback system", () => {
     const result = generateOmoConfig(config)
 
     //#then
-    expect((result.agents as Record<string, { model: string }>).explore.model).toBe("anthropic/claude-haiku-4-5")
+    expect((result.agents as Record<string, { model: string }>).explore.model)
+      .toBe(`anthropic/${transformModelForProvider("anthropic", "claude-haiku")}`)
   })
 })

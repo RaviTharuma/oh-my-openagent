@@ -103,7 +103,7 @@ describe("resolveVariantForModel", () => {
   test("returns correct variant for anthropic provider", () => {
     // given
     const config = {} as OhMyOpenCodeConfig
-    const model = { providerID: "anthropic", modelID: "claude-opus-4-6" }
+    const model = { providerID: "anthropic", modelID: "claude-opus" }
 
     // when
     const variant = resolveVariantForModel(config, "sisyphus", model)
@@ -203,7 +203,7 @@ describe("resolveVariantForModel", () => {
   test("returns correct variant for oracle agent with anthropic", () => {
     // given
     const config = {} as OhMyOpenCodeConfig
-    const model = { providerID: "anthropic", modelID: "claude-opus-4-6" }
+    const model = { providerID: "anthropic", modelID: "claude-opus" }
 
     // when
     const variant = resolveVariantForModel(config, "oracle", model)

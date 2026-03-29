@@ -110,7 +110,7 @@ describe("context-window-monitor", () => {
     const hook = createContextWindowMonitorHook(ctx as never)
     const sessionID = "ses_high_usage"
 
-    // 150K input + 10K cache read = 160K, which is 80% of 200K limit
+    // 800K input + 10K cache read = 810K, which is 81% of the 1M limit
     await hook.event({
       event: {
         type: "message.updated",
@@ -119,9 +119,10 @@ describe("context-window-monitor", () => {
             role: "assistant",
             sessionID,
             providerID: "anthropic",
+            modelID: "claude-sonnet-4-6",
             finish: true,
             tokens: {
-              input: 150000,
+              input: 800000,
               output: 1000,
               reasoning: 0,
               cache: { read: 10000, write: 0 },
@@ -154,9 +155,10 @@ describe("context-window-monitor", () => {
             role: "assistant",
             sessionID,
             providerID: "google-vertex-anthropic",
+            modelID: "claude-sonnet-4-6",
             finish: true,
             tokens: {
-              input: 150000,
+              input: 800000,
               output: 1000,
               reasoning: 0,
               cache: { read: 10000, write: 0 },
