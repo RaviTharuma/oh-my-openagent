@@ -7,6 +7,8 @@ const ANTHROPIC_PROVIDER_IDS = [
   "aws-bedrock-anthropic",
 ] as const
 const ANTHROPIC_CONTEXT_1M_LIMIT = 1_000_000
+const ANTHROPIC_BETA_HEADER = "anthropic-beta"
+const ANTHROPIC_CONTEXT_1M_SIGNAL = "context-1m"
 
 type ProviderConfig = {
   options?: { headers?: Record<string, string> };
@@ -43,6 +45,14 @@ function setProviderContextLimitMinimum(
   }
 }
 
+function hasAnthropicContext1MHeader(providerConfig: ProviderConfig | undefined): boolean {
+  return providerConfig?.options?.headers?.[ANTHROPIC_BETA_HEADER]?.includes(ANTHROPIC_CONTEXT_1M_SIGNAL) ?? false
+}
+
+function isKnownAnthropicProvider(providerID: string): boolean {
+  return ANTHROPIC_PROVIDER_IDS.includes(providerID as (typeof ANTHROPIC_PROVIDER_IDS)[number])
+}
+
 export function applyProviderConfig(params: {
   config: Record<string, unknown>;
   modelCacheState: ModelCacheState;
@@ -58,15 +68,27 @@ export function applyProviderConfig(params: {
   modelContextLimitsCache.clear()
   providerContextLimitMinimumsCache.clear()
 
-  const anthropicBeta = providers?.anthropic?.options?.headers?.["anthropic-beta"];
+  const providersWithAnthropicContext1M = Object.entries(providers ?? {})
+    .filter(([, providerConfig]) => hasAnthropicContext1MHeader(providerConfig))
+    .map(([providerID]) => providerID)
+
   params.modelCacheState.anthropicContext1MEnabled =
-    anthropicBeta?.includes("context-1m") ?? false;
+    providersWithAnthropicContext1M.some((providerID) => isKnownAnthropicProvider(providerID))
+
   if (params.modelCacheState.anthropicContext1MEnabled) {
     setProviderContextLimitMinimum(
       providerContextLimitMinimumsCache,
       ANTHROPIC_PROVIDER_IDS,
       ANTHROPIC_CONTEXT_1M_LIMIT,
     )
+  }
+
+  for (const providerID of providersWithAnthropicContext1M) {
+    if (isKnownAnthropicProvider(providerID)) {
+      continue
+    }
+
+    providerContextLimitMinimumsCache.set(providerID, ANTHROPIC_CONTEXT_1M_LIMIT)
   }
 
   const visionCapableModelsCache = params.modelCacheState.visionCapableModelsCache

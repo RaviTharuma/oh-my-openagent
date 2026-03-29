@@ -17,12 +17,16 @@ import {
   setPendingModelFallback,
 } from "../hooks/model-fallback/hook";
 import { getRawFallbackModels } from "../hooks/runtime-fallback/fallback-models";
+import { resolveAgentForSession } from "../hooks/runtime-fallback/agent-resolver";
 import { resetMessageCursor } from "../shared";
 import { getAgentConfigKey } from "../shared/agent-display-names";
 import { readConnectedProvidersCache } from "../shared/connected-providers-cache";
 import { log } from "../shared/logger";
+import { resolveModelIDAlias } from "../shared/model-capability-aliases";
+import { normalizeModelFormat } from "../shared/model-format-normalizer";
 import { shouldRetryError } from "../shared/model-error-classifier";
 import { buildFallbackChainFromModels } from "../shared/fallback-chain-from-models";
+import { normalizeModelID } from "../shared/model-normalization";
 import { extractRetryAttempt, normalizeRetryStatusMessage } from "../shared/retry-status-utils";
 import { clearSessionModel, getSessionModel, setSessionModel } from "../shared/session-model-state";
 import { clearSessionPromptParams } from "../shared/session-prompt-params-state";
@@ -104,6 +108,97 @@ function extractProviderModelFromErrorMessage(message: string): { providerID?: s
 
   return {};
 }
+
+type ComparableModel = {
+  providerID?: string;
+  modelID: string;
+};
+
+function parseComparableModel(
+  model: string | { providerID?: string; modelID: string } | undefined,
+): ComparableModel | undefined {
+  if (!model) return undefined;
+
+  if (typeof model === "string") {
+    const normalized = normalizeModelFormat(model);
+    if (normalized) {
+      return normalized;
+    }
+
+    const trimmed = model.trim();
+    return trimmed.length > 0 ? { modelID: trimmed } : undefined;
+  }
+
+  const trimmedModelID = model.modelID?.trim();
+  if (!trimmedModelID) {
+    return undefined;
+  }
+
+  const trimmedProviderID = model.providerID?.trim();
+  return {
+    modelID: trimmedModelID,
+    providerID: trimmedProviderID && trimmedProviderID.length > 0 ? trimmedProviderID : undefined,
+  };
+}
+
+function canonicalizeComparableModelID(modelID: string): string {
+  const normalized = normalizeModelID(modelID.trim().toLowerCase());
+  return resolveModelIDAlias(normalized).canonicalModelID;
+}
+
+function comparableModelsMatch(left: ComparableModel, right: ComparableModel): boolean {
+  const leftProvider = left.providerID?.trim().toLowerCase();
+  const rightProvider = right.providerID?.trim().toLowerCase();
+
+  if (leftProvider && rightProvider && leftProvider !== rightProvider) {
+    return false;
+  }
+
+  return canonicalizeComparableModelID(left.modelID) === canonicalizeComparableModelID(right.modelID);
+}
+
+function resolveConfiguredAgentComparableModel(
+  agentName: string,
+  pluginConfig: OhMyOpenCodeConfig,
+): ComparableModel | undefined {
+  const agentConfig = pluginConfig.agents?.[agentName as keyof typeof pluginConfig.agents];
+  if (!agentConfig) {
+    return undefined;
+  }
+
+  const explicitModel =
+    typeof agentConfig.model === "string"
+      ? parseComparableModel(agentConfig.model)
+      : undefined;
+  if (explicitModel) {
+    return explicitModel;
+  }
+
+  const categoryName = typeof agentConfig.category === "string" ? agentConfig.category : undefined;
+  const categoryModel =
+    categoryName && typeof pluginConfig.categories?.[categoryName]?.model === "string"
+      ? pluginConfig.categories[categoryName]!.model
+      : undefined;
+
+  return typeof categoryModel === "string" ? parseComparableModel(categoryModel) : undefined;
+}
+
+function inferMainSessionAgentFromConfiguredModel(
+  model: ComparableModel | undefined,
+  pluginConfig: OhMyOpenCodeConfig,
+): string | undefined {
+  if (!model || !pluginConfig.agents) {
+    return undefined;
+  }
+
+  const matches = Object.keys(pluginConfig.agents).filter((agentName) => {
+    const configuredModel = resolveConfiguredAgentComparableModel(agentName, pluginConfig);
+    return configuredModel ? comparableModelsMatch(model, configuredModel) : false;
+  });
+
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 function applyUserConfiguredFallbackChain(
   sessionID: string,
   agentName: string,
@@ -418,23 +513,26 @@ export function createEventHandler(args: {
 
             if (shouldRetryError(errorInfo)) {
               // Prefer the agent/model/provider from the assistant message payload.
-              let agentName = agent ?? getSessionAgent(sessionID);
+              const rawModel = info?.modelID as string | undefined;
+              const explicitProviderHint = info?.providerID as string | undefined;
+              let agentName = resolveAgentForSession(sessionID, agent);
               if (!agentName && sessionID === getMainSessionID()) {
-                if (errorMessage.includes("claude-opus") || errorMessage.includes("opus")) {
-                  agentName = "sisyphus";
-                } else if (errorMessage.includes("gpt-5")) {
-                  agentName = "hephaestus";
-                } else {
-                  agentName = "sisyphus";
-                }
+                agentName =
+                  inferMainSessionAgentFromConfiguredModel(
+                    parseComparableModel(
+                      rawModel
+                        ? { providerID: explicitProviderHint, modelID: rawModel }
+                        : undefined,
+                    ),
+                    args.pluginConfig,
+                  ) ?? "sisyphus";
               }
 
               if (agentName) {
                 const currentProvider = resolveFallbackProviderID(
                   sessionID,
-                  info?.providerID as string | undefined,
+                  explicitProviderHint,
                 );
-                const rawModel = info?.modelID as string | undefined;
                 const currentModel = rawModel ? normalizeFallbackModelID(rawModel) : undefined;
                 applyUserConfiguredFallbackChain(sessionID, agentName, currentProvider, args.pluginConfig);
 
@@ -482,22 +580,27 @@ export function createEventHandler(args: {
 
           const errorInfo = { name: undefined as string | undefined, message: retryMessage };
           if (shouldRetryError(errorInfo)) {
-            let agentName = getSessionAgent(sessionID);
+            const parsed = extractProviderModelFromErrorMessage(retryMessage);
+            const lastKnown = lastKnownModelBySession.get(sessionID);
+            const rawCurrentModel = parsed.modelID ?? lastKnown?.modelID;
+            let agentName = resolveAgentForSession(sessionID);
             if (!agentName && sessionID === getMainSessionID()) {
-              if (retryMessage.includes("claude-opus") || retryMessage.includes("opus")) {
-                agentName = "sisyphus";
-              } else if (retryMessage.includes("gpt-5")) {
-                agentName = "hephaestus";
-              } else {
-                agentName = "sisyphus";
-              }
+              agentName =
+                inferMainSessionAgentFromConfiguredModel(
+                  parseComparableModel(
+                    rawCurrentModel
+                      ? {
+                          providerID: parsed.providerID ?? lastKnown?.providerID,
+                          modelID: rawCurrentModel,
+                        }
+                      : undefined,
+                  ),
+                  args.pluginConfig,
+                ) ?? "sisyphus";
             }
 
             if (agentName) {
-              const parsed = extractProviderModelFromErrorMessage(retryMessage);
-              const lastKnown = lastKnownModelBySession.get(sessionID);
               const currentProvider = resolveFallbackProviderID(sessionID, parsed.providerID);
-              const rawCurrentModel = parsed.modelID ?? lastKnown?.modelID;
               const currentModel = rawCurrentModel ? normalizeFallbackModelID(rawCurrentModel) : undefined;
               applyUserConfiguredFallbackChain(sessionID, agentName, currentProvider, args.pluginConfig);
 
@@ -565,26 +668,33 @@ export function createEventHandler(args: {
         }
         // Second, try model fallback for model errors (rate limit, quota, provider issues, etc.)
         else if (sessionID && shouldRetryError(errorInfo) && !isRuntimeFallbackEnabled && isModelFallbackEnabled) {
-          let agentName = getSessionAgent(sessionID);
+          const parsed = extractProviderModelFromErrorMessage(errorMessage);
+          const lastKnown = lastKnownModelBySession.get(sessionID);
+          const explicitProviderHint = props?.providerID as string | undefined;
+          const rawCurrentModel =
+            (props?.modelID as string | undefined) || parsed.modelID || lastKnown?.modelID;
+          let agentName = resolveAgentForSession(sessionID);
 
           if (!agentName && sessionID === getMainSessionID()) {
-            if (errorMessage.includes("claude-opus") || errorMessage.includes("opus")) {
-              agentName = "sisyphus";
-            } else if (errorMessage.includes("gpt-5")) {
-              agentName = "hephaestus";
-            } else {
-              agentName = "sisyphus";
-            }
+            agentName =
+              inferMainSessionAgentFromConfiguredModel(
+                parseComparableModel(
+                  rawCurrentModel
+                    ? {
+                        providerID: explicitProviderHint || parsed.providerID || lastKnown?.providerID,
+                        modelID: rawCurrentModel,
+                      }
+                    : undefined,
+                ),
+                args.pluginConfig,
+              ) ?? "sisyphus";
           }
 
           if (agentName) {
-            const parsed = extractProviderModelFromErrorMessage(errorMessage);
-            const lastKnown = lastKnownModelBySession.get(sessionID);
             const currentProvider = resolveFallbackProviderID(
               sessionID,
-              (props?.providerID as string | undefined) || parsed.providerID,
+              explicitProviderHint || parsed.providerID,
             );
-            const rawCurrentModel = (props?.modelID as string | undefined) || parsed.modelID || lastKnown?.modelID;
             const currentModel = rawCurrentModel ? normalizeFallbackModelID(rawCurrentModel) : undefined;
             applyUserConfiguredFallbackChain(sessionID, agentName, currentProvider, args.pluginConfig);
 

@@ -153,6 +153,62 @@ describe("applyProviderConfig", () => {
     ])
   })
 
+  test("detects explicit 1M mode from non-native Anthropic provider configs too", () => {
+    // given
+    const modelCacheState = createModelCacheState()
+
+    // when
+    applyProviderConfig({
+      config: {
+        provider: {
+          "google-vertex-anthropic": {
+            options: {
+              headers: {
+                "anthropic-beta": "context-1m-2025-08-07",
+              },
+            },
+          },
+        },
+      },
+      modelCacheState,
+    })
+
+    // then
+    expect(modelCacheState.anthropicContext1MEnabled).toBe(true)
+    expect(Array.from(modelCacheState.providerContextLimitMinimumsCache?.entries() ?? [])).toEqual([
+      ["anthropic", 1_000_000],
+      ["google-vertex-anthropic", 1_000_000],
+      ["aws-bedrock-anthropic", 1_000_000],
+    ])
+  })
+
+  test("stores provider-specific 1M minimums for custom Anthropic-compatible proxies without flipping the global Anthropic flag", () => {
+    // given
+    const modelCacheState = createModelCacheState()
+
+    // when
+    applyProviderConfig({
+      config: {
+        provider: {
+          "custom-proxy": {
+            options: {
+              headers: {
+                "anthropic-beta": "context-1m-2025-08-07",
+              },
+            },
+          },
+        },
+      },
+      modelCacheState,
+    })
+
+    // then
+    expect(modelCacheState.anthropicContext1MEnabled).toBe(false)
+    expect(Array.from(modelCacheState.providerContextLimitMinimumsCache?.entries() ?? [])).toEqual([
+      ["custom-proxy", 1_000_000],
+    ])
+  })
+
   test("clears stale vision-capable models when provider config changes", () => {
     // given
     const modelCacheState = createModelCacheState()

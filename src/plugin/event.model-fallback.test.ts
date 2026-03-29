@@ -401,6 +401,165 @@ describe("createEventHandler - model fallback", () => {
     expect(promptCalls).toEqual([])
   })
 
+  test("infers main-session fallback agent from configured agent model instead of model-family string matching", async () => {
+    //#given
+    const sessionID = "ses_main_configured_model_fallback"
+    setMainSession(sessionID)
+    clearPendingModelFallback(sessionID)
+
+    const modelFallback = createModelFallbackHook()
+    const pluginConfig = {
+      agents: {
+        sisyphus: {
+          model: "openai/gpt-5.4",
+          fallback_models: ["quotio/kimi-k2.5"],
+        },
+      },
+    }
+
+    const { handler, abortCalls, promptCalls } = createHandler({ hooks: { modelFallback }, pluginConfig })
+
+    const chatMessageHandler = createChatMessageHandler({
+      ctx: {
+        client: {
+          tui: {
+            showToast: async () => ({}),
+          },
+        },
+      } as any,
+      pluginConfig: {} as any,
+      firstMessageVariantGate: {
+        shouldOverride: () => false,
+        markApplied: () => {},
+      },
+      hooks: {
+        modelFallback,
+        stopContinuationGuard: null,
+        keywordDetector: null,
+        claudeCodeHooks: null,
+        autoSlashCommand: null,
+        startWork: null,
+        ralphLoop: null,
+      } as any,
+    })
+
+    //#when
+    await handler({
+      event: {
+        type: "session.error",
+        properties: {
+          sessionID,
+          providerID: "openai",
+          modelID: "gpt-5.4",
+          error: {
+            name: "RateLimitError",
+            message: "All credentials for model gpt-5.4 are cooling down [retrying in 7m 56s attempt #1]",
+          },
+        },
+      },
+    })
+
+    const output = { message: {}, parts: [] as Array<{ type: string; text?: string }> }
+    await chatMessageHandler(
+      {
+        sessionID,
+        model: { providerID: "openai", modelID: "gpt-5.4" },
+      },
+      output,
+    )
+
+    //#then
+    expect(abortCalls).toEqual([sessionID])
+    expect(promptCalls).toEqual([sessionID])
+    expect(output.message["model"]).toEqual({
+      providerID: "quotio",
+      modelID: "kimi-k2.5",
+    })
+    expect(output.message["variant"]).toBeUndefined()
+  })
+
+  test("infers main-session fallback agent from configured category model on session.status retry", async () => {
+    //#given
+    const sessionID = "ses_main_category_fallback"
+    setMainSession(sessionID)
+    clearPendingModelFallback(sessionID)
+
+    const modelFallback = createModelFallbackHook()
+    const pluginConfig = {
+      categories: {
+        ultrabrain: {
+          model: "openai/gpt-5.4",
+        },
+      },
+      agents: {
+        sisyphus: {
+          category: "ultrabrain",
+          fallback_models: ["quotio/glm-5"],
+        },
+      },
+    }
+
+    const { handler, abortCalls, promptCalls } = createHandler({ hooks: { modelFallback }, pluginConfig })
+
+    const chatMessageHandler = createChatMessageHandler({
+      ctx: {
+        client: {
+          tui: {
+            showToast: async () => ({}),
+          },
+        },
+      } as any,
+      pluginConfig: {} as any,
+      firstMessageVariantGate: {
+        shouldOverride: () => false,
+        markApplied: () => {},
+      },
+      hooks: {
+        modelFallback,
+        stopContinuationGuard: null,
+        keywordDetector: null,
+        claudeCodeHooks: null,
+        autoSlashCommand: null,
+        startWork: null,
+        ralphLoop: null,
+      } as any,
+    })
+
+    //#when
+    await handler({
+      event: {
+        type: "session.status",
+        properties: {
+          sessionID,
+          status: {
+            type: "retry",
+            attempt: 1,
+            message: "All credentials for model gpt-5.4 are cooling down [retrying in 7m 56s attempt #1]",
+            next: 476,
+          },
+        },
+      },
+    })
+
+    const output = { message: {}, parts: [] as Array<{ type: string; text?: string }> }
+    await chatMessageHandler(
+      {
+        sessionID,
+        model: { providerID: "openai", modelID: "gpt-5.4" },
+      },
+      output,
+    )
+
+    //#then
+    expect(abortCalls).toEqual([sessionID])
+    expect(promptCalls).toEqual([sessionID])
+    expect(output.message["model"]).toEqual({
+      providerID: "quotio",
+      modelID: "glm-5",
+    })
+    expect(output.message["variant"]).toBeUndefined()
+  })
+
   test("prefers user-configured fallback_models over hardcoded chain on session.status retry", async () => {
     //#given
     const sessionID = "ses_status_retry_user_fallback"
