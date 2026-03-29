@@ -7,6 +7,7 @@ import type { InstallConfig } from "./types"
 import type { AgentConfig, CategoryConfig, GeneratedOmoConfig } from "./model-fallback-types"
 import { applyOpenAiOnlyModelCatalog, isOpenAiOnlyAvailability } from "./openai-only-model-catalog"
 import { toProviderAvailability } from "./provider-availability"
+import { transformModelForProvider } from "../shared/provider-model-id-transform"
 import {
 	getSisyphusFallbackChain,
 	isAnyFallbackEntryAvailable,
@@ -64,9 +65,13 @@ export function generateModelConfig(config: InstallConfig): GeneratedOmoConfig {
 
     if (role === "explore") {
       if (avail.native.claude) {
-        agents[role] = { model: "anthropic/claude-haiku-4-5" }
+        agents[role] = {
+          model: `anthropic/${transformModelForProvider("anthropic", "claude-haiku")}`,
+        }
       } else if (avail.opencodeZen) {
-        agents[role] = { model: "opencode/claude-haiku-4-5" }
+        agents[role] = {
+          model: `opencode/${transformModelForProvider("opencode", "claude-haiku")}`,
+        }
       } else if (avail.opencodeGo) {
         agents[role] = { model: "opencode-go/minimax-m2.7" }
       } else if (avail.copilot) {

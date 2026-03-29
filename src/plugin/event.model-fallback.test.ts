@@ -10,6 +10,7 @@ import { createEventHandler } from "./event"
 import { createChatMessageHandler } from "./chat-message"
 import { _resetForTesting, setMainSession } from "../features/claude-code-session-state"
 import { createModelFallbackHook, clearPendingModelFallback } from "../hooks/model-fallback/hook"
+import { transformModelForProvider } from "../shared/provider-model-id-transform"
 describe("createEventHandler - model fallback", () => {
   const createHandler = (args?: { hooks?: any; pluginConfig?: any }) => {
     const abortCalls: string[] = []
@@ -191,7 +192,7 @@ describe("createEventHandler - model fallback", () => {
     expect(promptCalls).toEqual([sessionID])
     expect(output.message["model"]).toEqual({
       providerID: "anthropic",
-      modelID: "claude-opus-4-6",
+      modelID: transformModelForProvider("anthropic", "claude-opus-4-6"),
     })
     expect(output.message["variant"]).toBe("max")
   })

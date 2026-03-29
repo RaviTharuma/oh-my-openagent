@@ -199,7 +199,7 @@ This is NOT a default choice - it's for genuinely unclassifiable moderate-effort
 </Category_Context>
 
 <Caller_Warning>
-THIS CATEGORY USES A MID-TIER MODEL (claude-sonnet-4-6).
+THIS CATEGORY USES A MID-TIER MODEL (claude-sonnet).
 
 **PROVIDE CLEAR STRUCTURE:**
 1. MUST DO: Enumerate required actions explicitly
@@ -291,8 +291,8 @@ export const DEFAULT_CATEGORIES: Record<string, CategoryConfig> = {
   deep: { model: "openai/gpt-5.3-codex", variant: "medium" },
   artistry: { model: "google/gemini-3.1-pro", variant: "high" },
   quick: { model: "openai/gpt-5.4-mini" },
-  "unspecified-low": { model: "anthropic/claude-sonnet-4-6" },
-  "unspecified-high": { model: "anthropic/claude-opus-4-6", variant: "max" },
+  "unspecified-low": { model: "anthropic/claude-sonnet" },
+  "unspecified-high": { model: "anthropic/claude-opus", variant: "max" },
   writing: { model: "kimi-for-coding/k2p5" },
 }
 

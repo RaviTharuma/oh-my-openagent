@@ -509,22 +509,22 @@ describe("migrateConfigFile", () => {
      // when: Migrate config file
      const needsWrite = migrateConfigFile(testConfigPath, rawConfig)
 
-     // then: Model version should be migrated
-     expect(needsWrite).toBe(true)
-     const categories = rawConfig.categories as Record<string, Record<string, unknown>>
-     expect(categories["my-category"].model).toBe("anthropic/claude-opus-4-6")
+   // then: Model version should be migrated
+   expect(needsWrite).toBe(true)
+   const categories = rawConfig.categories as Record<string, Record<string, unknown>>
+   expect(categories["my-category"].model).toBe("anthropic/claude-opus")
    })
 
    test("does not set needsWrite when no model versions need migration", () => {
-     // given: Config with current model versions
+    // given: Config with already-migrated model aliases
      const rawConfig: Record<string, unknown> = {
-       agents: {
-         sisyphus: { model: "openai/gpt-5.4-codex" },
-       },
-       categories: {
-         "my-category": { model: "anthropic/claude-opus-4-6" },
-       },
-     }
+      agents: {
+        sisyphus: { model: "openai/gpt-5.4-codex" },
+      },
+      categories: {
+        "my-category": { model: "anthropic/claude-opus" },
+      },
+    }
 
      // when: Migrate config file
      const needsWrite = migrateConfigFile(testConfigPath, rawConfig)
@@ -560,10 +560,10 @@ describe("MODEL_VERSION_MAP", () => {
     expect(MODEL_VERSION_MAP["openai/gpt-5.4-codex"]).toBeUndefined()
   })
 
-  test("maps anthropic/claude-opus-4-5 to anthropic/claude-opus-4-6", () => {
+  test("maps anthropic/claude-opus-4-5 to anthropic/claude-opus stable alias", () => {
     // given/when: Check MODEL_VERSION_MAP
     // then: Should contain correct mapping
-    expect(MODEL_VERSION_MAP["anthropic/claude-opus-4-5"]).toBe("anthropic/claude-opus-4-6")
+    expect(MODEL_VERSION_MAP["anthropic/claude-opus-4-5"]).toBe("anthropic/claude-opus")
   })
 })
 
@@ -584,7 +584,7 @@ describe("migrateModelVersions", () => {
     expect(sisyphus.temperature).toBe(0.1)
   })
 
-  test("replaces anthropic model version", () => {
+  test("replaces anthropic model version with stable alias", () => {
     // given: Agent config with old anthropic model
     const agents = {
       prometheus: { model: "anthropic/claude-opus-4-5" },
@@ -596,7 +596,7 @@ describe("migrateModelVersions", () => {
     // then: Model should be updated
     expect(changed).toBe(true)
     const prometheus = migrated["prometheus"] as Record<string, unknown>
-    expect(prometheus.model).toBe("anthropic/claude-opus-4-6")
+    expect(prometheus.model).toBe("anthropic/claude-opus")
   })
 
   test("leaves unknown model strings untouched", () => {
@@ -656,7 +656,7 @@ describe("migrateModelVersions", () => {
     // then: Only mapped models should be updated
     expect(changed).toBe(true)
     expect((migrated["sisyphus"] as Record<string, unknown>).model).toBe("openai/gpt-5.4-codex")
-    expect((migrated["prometheus"] as Record<string, unknown>).model).toBe("anthropic/claude-opus-4-6")
+    expect((migrated["prometheus"] as Record<string, unknown>).model).toBe("anthropic/claude-opus")
     expect((migrated["oracle"] as Record<string, unknown>).model).toBe("openai/gpt-5.4")
   })
 
@@ -689,6 +689,24 @@ describe("migrateModelVersions", () => {
     expect(sisyphus.model).toBe("openai/gpt-5.4-codex")
   })
 
+  test("skips legacy anthropic migration keys from older plugin versions", () => {
+    // given: Old anthropic model with a previously-applied legacy migration key
+    const agents = {
+      prometheus: { model: "anthropic/claude-opus-4-5" },
+    }
+    const appliedMigrations = new Set([
+      "model-version:anthropic/claude-opus-4-5->anthropic/claude-opus-4-6",
+    ])
+
+    // when: Migrate with legacy migration history
+    const { migrated, changed, newMigrations } = migrateModelVersions(agents, appliedMigrations)
+
+    // then: Migration should still be skipped so intentional user reverts are respected
+    expect(changed).toBe(false)
+    expect(newMigrations).toEqual([])
+    expect((migrated.prometheus as Record<string, unknown>).model).toBe("anthropic/claude-opus-4-5")
+  })
+
   test("applies new migrations and records them", () => {
     // given: Agent config with old model, no prior migrations
     const agents = {
@@ -718,9 +736,9 @@ describe("migrateModelVersions", () => {
 
     // then: Only prometheus should be migrated
     expect(changed).toBe(true)
-    expect(newMigrations).toEqual(["model-version:anthropic/claude-opus-4-5->anthropic/claude-opus-4-6"])
+    expect(newMigrations).toEqual(["model-version:anthropic/claude-opus-4-5->anthropic/claude-opus"])
     expect((migrated["sisyphus"] as Record<string, unknown>).model).toBe("openai/gpt-5.4-codex")
-    expect((migrated["prometheus"] as Record<string, unknown>).model).toBe("anthropic/claude-opus-4-6")
+    expect((migrated["prometheus"] as Record<string, unknown>).model).toBe("anthropic/claude-opus")
   })
 
   test("backward compatible without appliedMigrations param", () => {
@@ -802,7 +820,7 @@ describe("migrateConfigFile _migrations tracking", () => {
     expect(result).toBe(true)
     expect(rawConfig._migrations).toEqual([
       "model-version:openai/gpt-5.4-codex->openai/gpt-5.3-codex",
-      "model-version:anthropic/claude-opus-4-5->anthropic/claude-opus-4-6",
+      "model-version:anthropic/claude-opus-4-5->anthropic/claude-opus",
     ])
 
     // cleanup
@@ -1222,9 +1240,9 @@ describe("migrateModelVersions with applied migrations", () => {
 
     // then: Skip sisyphus (already applied), apply oracle
     expect(changed).toBe(true)
-    expect(newMigrations).toEqual(["model-version:anthropic/claude-opus-4-5->anthropic/claude-opus-4-6"])
+    expect(newMigrations).toEqual(["model-version:anthropic/claude-opus-4-5->anthropic/claude-opus"])
     expect((migrated.sisyphus as Record<string, unknown>).model).toBe("openai/gpt-5.4-codex")
-    expect((migrated.oracle as Record<string, unknown>).model).toBe("anthropic/claude-opus-4-6")
+    expect((migrated.oracle as Record<string, unknown>).model).toBe("anthropic/claude-opus")
   })
 
   test("backward compatible: no appliedMigrations param", () => {
@@ -1330,10 +1348,10 @@ describe("migrateConfigFile with _migrations tracking", () => {
     // then: Should skip sisyphus, migrate oracle, append to _migrations
     expect(needsWrite).toBe(true)
     expect((rawConfig.agents as Record<string, Record<string, unknown>>).sisyphus.model).toBe("openai/gpt-5.4-codex")
-    expect((rawConfig.agents as Record<string, Record<string, unknown>>).oracle.model).toBe("anthropic/claude-opus-4-6")
+    expect((rawConfig.agents as Record<string, Record<string, unknown>>).oracle.model).toBe("anthropic/claude-opus")
     expect(rawConfig._migrations).toEqual([
       "model-version:openai/gpt-5.4-codex->openai/gpt-5.3-codex",
-      "model-version:anthropic/claude-opus-4-5->anthropic/claude-opus-4-6",
+      "model-version:anthropic/claude-opus-4-5->anthropic/claude-opus",
     ])
   })
 

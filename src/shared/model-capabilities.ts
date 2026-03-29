@@ -2,6 +2,7 @@ import bundledModelCapabilitiesSnapshotJson from "../generated/model-capabilitie
 import { findProviderModelMetadata, type ModelMetadata } from "./connected-providers-cache"
 import { resolveModelIDAlias } from "./model-capability-aliases"
 import { detectHeuristicModelFamily } from "./model-capability-heuristics"
+import { resolveStableFamilyAlias } from "./model-availability"
 
 export type ModelCapabilitiesSnapshotEntry = {
   id: string
@@ -335,6 +336,18 @@ export function getBundledModelCapabilitiesSnapshot(): ModelCapabilitiesSnapshot
   return bundledModelCapabilitiesSnapshot
 }
 
+export function resolveSnapshotModelKey(
+  snapshot: ModelCapabilitiesSnapshot,
+  modelID: string,
+): string | undefined {
+  if (snapshot.models[modelID]) {
+    return modelID
+  }
+
+  const stableFamilyAliasMatch = resolveStableFamilyAlias(modelID, Object.keys(snapshot.models))
+  return stableFamilyAliasMatch ?? undefined
+}
+
 export function getModelCapabilities(input: GetModelCapabilitiesInput): ModelCapabilities {
   const canonicalization = resolveModelIDAlias(input.modelID)
   const requestedModelID = canonicalization.requestedModelID
@@ -345,13 +358,19 @@ export function getModelCapabilities(input: GetModelCapabilitiesInput): ModelCap
   )
   const runtimeSnapshot = input.runtimeSnapshot
   const bundledSnapshot = input.bundledSnapshot ?? bundledModelCapabilitiesSnapshot
-  const snapshotEntry = runtimeSnapshot?.models?.[canonicalModelID] ?? bundledSnapshot.models[canonicalModelID]
+  const runtimeSnapshotModelKey = runtimeSnapshot
+    ? resolveSnapshotModelKey(runtimeSnapshot, canonicalModelID)
+    : undefined
+  const bundledSnapshotModelKey = resolveSnapshotModelKey(bundledSnapshot, canonicalModelID)
+  const snapshotEntry =
+    (runtimeSnapshotModelKey ? runtimeSnapshot?.models?.[runtimeSnapshotModelKey] : undefined)
+    ?? (bundledSnapshotModelKey ? bundledSnapshot.models[bundledSnapshotModelKey] : undefined)
   const heuristicFamily = detectHeuristicModelFamily(canonicalModelID)
   const runtimeVariants = readRuntimeModelVariants(runtimeModel)
   const snapshotSource: ModelCapabilitiesDiagnostics["snapshot"]["source"] =
-    runtimeSnapshot?.models?.[canonicalModelID]
+    runtimeSnapshotModelKey
       ? "runtime-snapshot"
-      : bundledSnapshot.models[canonicalModelID]
+      : bundledSnapshotModelKey
       ? "bundled-snapshot"
       : "none"
   const familySource: ModelCapabilitiesDiagnostics["family"]["source"] =

@@ -1,17 +1,38 @@
 /**
- * Model version migration map: old full model strings → new full model strings.
- * Used to auto-upgrade hardcoded model versions in user configs when the plugin
- * bumps to newer model versions.
+ * Model migration map: legacy version-pinned model strings → stable provider aliases.
  *
- * Keys are full "provider/model" strings. Only openai and anthropic entries needed.
+ * The goal is to stop baking exact Anthropic point releases into user config.
+ * Runtime resolution can then map the stable alias to whatever concrete provider
+ * model is currently available via cache/metadata.
  */
 export const MODEL_VERSION_MAP: Record<string, string> = {
-  "anthropic/claude-opus-4-5": "anthropic/claude-opus-4-6",
-  "anthropic/claude-sonnet-4-5": "anthropic/claude-sonnet-4-6",
+  "anthropic/claude-opus-4-5": "anthropic/claude-opus",
+  "anthropic/claude-sonnet-4-5": "anthropic/claude-sonnet",
 }
 
 function migrationKey(oldModel: string, newModel: string): string {
   return `model-version:${oldModel}->${newModel}`
+}
+
+const LEGACY_MIGRATION_KEYS: Record<string, string[]> = {
+  "anthropic/claude-opus-4-5": [
+    migrationKey("anthropic/claude-opus-4-5", "anthropic/claude-opus-4-6"),
+  ],
+  "anthropic/claude-sonnet-4-5": [
+    migrationKey("anthropic/claude-sonnet-4-5", "anthropic/claude-sonnet-4-6"),
+  ],
+}
+
+function hasAppliedMigration(appliedMigrations: Set<string> | undefined, oldModel: string, newModel: string): boolean {
+  if (!appliedMigrations) return false
+
+  const currentKey = migrationKey(oldModel, newModel)
+  if (appliedMigrations.has(currentKey)) {
+    return true
+  }
+
+  const legacyKeys = LEGACY_MIGRATION_KEYS[oldModel] ?? []
+  return legacyKeys.some((key) => appliedMigrations.has(key))
 }
 
 export function migrateModelVersions(
@@ -31,7 +52,7 @@ export function migrateModelVersions(
         const mKey = migrationKey(oldModel, newModel)
 
         // Skip if this migration was already applied (user may have reverted)
-        if (appliedMigrations?.has(mKey)) {
+        if (hasAppliedMigration(appliedMigrations, oldModel, newModel)) {
           migrated[key] = value
           continue
         }
