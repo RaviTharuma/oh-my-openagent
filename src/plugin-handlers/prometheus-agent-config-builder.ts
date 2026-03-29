@@ -41,12 +41,19 @@ export async function buildPrometheusAgentConfig(params: {
 
   const configuredPrometheusModel =
     params.pluginPrometheusOverride?.model ?? categoryConfig?.model;
+  const hasUserConfiguredCategoryModel = Boolean(
+    params.pluginPrometheusOverride?.category
+    && params.userCategories?.[params.pluginPrometheusOverride.category]?.model,
+  )
+  const explicitCategoryModel = hasUserConfiguredCategoryModel
+    ? categoryConfig?.model
+    : undefined
 
   const modelResolution = resolveModelPipeline({
     intent: {
       uiSelectedModel: configuredPrometheusModel ? undefined : params.currentModel,
-      userModel: params.pluginPrometheusOverride?.model,
-      categoryDefaultModel: categoryConfig?.model,
+      userModel: params.pluginPrometheusOverride?.model ?? explicitCategoryModel,
+      categoryDefaultModel: explicitCategoryModel ? undefined : categoryConfig?.model,
     },
     constraints: { availableModels },
     policy: {

@@ -1,60 +1,47 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import * as providerModelTransform from "../shared/provider-model-id-transform"
+import { applyOpenAiOnlyModelCatalog } from "./openai-only-model-catalog"
 
-import { generateModelConfig } from "./model-fallback"
-import type { InstallConfig } from "./types"
-
-function createConfig(overrides: Partial<InstallConfig> = {}): InstallConfig {
-  return {
-    hasClaude: false,
-    isMax20: false,
-    hasOpenAI: false,
-    hasGemini: false,
-    hasCopilot: false,
-    hasOpencodeZen: false,
-    hasZaiCodingPlan: false,
-    hasKimiForCoding: false,
-    hasOpencodeGo: false,
-    ...overrides,
-  }
-}
-
-describe("generateModelConfig OpenAI-only model catalog", () => {
-  test("fills remaining OpenAI-only agent gaps with OpenAI models", () => {
-    // #given
-    const config = createConfig({ hasOpenAI: true })
-
-    // #when
-    const result = generateModelConfig(config)
-
-    // #then
-    expect(result.agents?.explore).toEqual({ model: "openai/gpt-5.4", variant: "medium" })
-    expect(result.agents?.librarian).toEqual({ model: "openai/gpt-5.4", variant: "medium" })
+describe("applyOpenAiOnlyModelCatalog", () => {
+  afterEach(() => {
+    mock.restore()
   })
 
-  test("fills remaining OpenAI-only category gaps with OpenAI models", () => {
-    // #given
-    const config = createConfig({ hasOpenAI: true })
+  test("uses provider model transforms instead of fixed version strings", () => {
+    const transformSpy = spyOn(
+      providerModelTransform,
+      "transformModelForProvider",
+    ).mockImplementation((provider: string, model: string) => {
+      if (provider !== "openai") {
+        return model
+      }
 
-    // #when
-    const result = generateModelConfig(config)
+      if (model === "gpt-5") {
+        return "gpt-5.7"
+      }
 
-    // #then
-    expect(result.categories?.artistry).toEqual({ model: "openai/gpt-5.4", variant: "xhigh" })
-    expect(result.categories?.quick).toEqual({ model: "openai/gpt-5.4-mini" })
-    expect(result.categories?.["visual-engineering"]).toEqual({ model: "openai/gpt-5.4", variant: "high" })
-    expect(result.categories?.writing).toEqual({ model: "openai/gpt-5.4", variant: "medium" })
-  })
+      if (model === "gpt-5-mini") {
+        return "gpt-5.7-mini"
+      }
 
-  test("does not apply OpenAI-only overrides when OpenCode Go is also available", () => {
-    // #given
-    const config = createConfig({ hasOpenAI: true, hasOpencodeGo: true })
+      return model
+    })
 
-    // #when
-    const result = generateModelConfig(config)
+    const result = applyOpenAiOnlyModelCatalog({
+      agents: {},
+      categories: {},
+    } as any)
 
-    // #then
-    expect(result.agents?.explore).toEqual({ model: "opencode-go/minimax-m2.7" })
-    expect(result.agents?.librarian).toEqual({ model: "opencode-go/minimax-m2.7" })
-    expect(result.categories?.quick).toEqual({ model: "openai/gpt-5.4-mini" })
+    transformSpy.mockRestore()
+
+    expect(result.agents.explore).toEqual({ model: "openai/gpt-5.7", variant: "medium" })
+    expect(result.agents.librarian).toEqual({ model: "openai/gpt-5.7", variant: "medium" })
+    expect(result.categories.artistry).toEqual({ model: "openai/gpt-5.7", variant: "xhigh" })
+    expect(result.categories.quick).toEqual({ model: "openai/gpt-5.7-mini" })
+    expect(result.categories["visual-engineering"]).toEqual({
+      model: "openai/gpt-5.7",
+      variant: "high",
+    })
+    expect(result.categories.writing).toEqual({ model: "openai/gpt-5.7", variant: "medium" })
   })
 })

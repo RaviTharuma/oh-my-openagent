@@ -5,6 +5,7 @@ import type { FallbackEntry } from "./model-requirements"
 import { transformModelForProvider } from "./provider-model-id-transform"
 import { normalizeModel } from "./model-normalization"
 import { resolveExplicitModel } from "./explicit-model-resolution"
+import { resolveExplicitFallbackModel } from "./explicit-fallback-model-resolution"
 
 export type ModelResolutionRequest = {
   intent?: {
@@ -110,14 +111,25 @@ export function resolveModelPipeline(
       if (connectedSet !== null) {
         for (const model of userFallbackModels) {
           attempted.push(model)
-          const parts = model.split("/")
+          const resolvedFallback = resolveExplicitFallbackModel(model, { availableModels })
+          if (!resolvedFallback) {
+            continue
+          }
+
+          const parts = resolvedFallback.model.split("/")
           if (parts.length >= 2) {
             const provider = parts[0]
             if (connectedSet.has(provider)) {
-              const modelName = parts.slice(1).join("/")
-              const transformedModel = `${provider}/${transformModelForProvider(provider, modelName)}`
-              log("Model resolved via user fallback_models (connected provider)", { model: transformedModel, original: model })
-              return { model: transformedModel, provenance: "provider-fallback", attempted }
+              log("Model resolved via user fallback_models (connected provider)", {
+                model: resolvedFallback.model,
+                original: model,
+              })
+              return {
+                model: resolvedFallback.model,
+                provenance: "provider-fallback",
+                attempted,
+                ...(resolvedFallback.variant ? { variant: resolvedFallback.variant } : {}),
+              }
             }
           }
         }
@@ -126,12 +138,18 @@ export function resolveModelPipeline(
     } else {
       for (const model of userFallbackModels) {
         attempted.push(model)
-        const parts = model.split("/")
-        const providerHint = parts.length >= 2 ? [parts[0]] : undefined
-        const match = fuzzyMatchModel(model, availableModels, providerHint)
-        if (match) {
-          log("Model resolved via user fallback_models (availability confirmed)", { model: model, match })
-          return { model: match, provenance: "provider-fallback", attempted }
+        const resolvedFallback = resolveExplicitFallbackModel(model, { availableModels })
+        if (resolvedFallback) {
+          log("Model resolved via user fallback_models (availability confirmed)", {
+            model: resolvedFallback.model,
+            original: model,
+          })
+          return {
+            model: resolvedFallback.model,
+            provenance: "provider-fallback",
+            attempted,
+            ...(resolvedFallback.variant ? { variant: resolvedFallback.variant } : {}),
+          }
         }
       }
       log("No available model found in user fallback_models, falling through to hardcoded chain")
