@@ -68,6 +68,12 @@ describe("transformModelForProvider", () => {
 	})
 
 	describe("compatibility fallback", () => {
+		test("uses bundled canonical metadata for github-copilot legacy claude ids when cache is unavailable", () => {
+			const result = transformModelForProvider("github-copilot", "claude-opus-4-1")
+
+			expect(result).toBe("claude-opus-4.1")
+		})
+
 		test("keeps github-copilot fallback when cache is unavailable", () => {
 			const result = transformModelForProvider("github-copilot", "claude-sonnet-4-5")
 

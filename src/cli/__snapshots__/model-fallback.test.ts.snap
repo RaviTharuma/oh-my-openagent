@@ -824,14 +824,14 @@ exports[`generateModelConfig fallback providers uses GitHub Copilot models when 
   },
   "categories": {
     "artistry": {
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro",
       "variant": "high",
     },
     "quick": {
       "model": "github-copilot/gpt-5.4-mini",
     },
     "ultrabrain": {
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro",
       "variant": "high",
     },
     "unspecified-high": {
@@ -841,11 +841,11 @@ exports[`generateModelConfig fallback providers uses GitHub Copilot models when 
       "model": "github-copilot/claude-sonnet",
     },
     "visual-engineering": {
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro",
       "variant": "high",
     },
     "writing": {
-      "model": "github-copilot/gemini-3-flash-preview",
+      "model": "github-copilot/gemini-3-flash",
     },
   },
 }
@@ -894,14 +894,14 @@ exports[`generateModelConfig fallback providers uses GitHub Copilot models with 
   },
   "categories": {
     "artistry": {
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro",
       "variant": "high",
     },
     "quick": {
       "model": "github-copilot/gpt-5.4-mini",
     },
     "ultrabrain": {
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro",
       "variant": "high",
     },
     "unspecified-high": {
@@ -912,11 +912,11 @@ exports[`generateModelConfig fallback providers uses GitHub Copilot models with 
       "model": "github-copilot/claude-sonnet",
     },
     "visual-engineering": {
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro",
       "variant": "high",
     },
     "writing": {
-      "model": "github-copilot/gemini-3-flash-preview",
+      "model": "github-copilot/gemini-3-flash",
     },
   },
 }
@@ -1157,7 +1157,7 @@ exports[`generateModelConfig mixed provider scenarios uses OpenAI + Copilot comb
   },
   "categories": {
     "artistry": {
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro",
       "variant": "high",
     },
     "deep": {
@@ -1178,11 +1178,11 @@ exports[`generateModelConfig mixed provider scenarios uses OpenAI + Copilot comb
       "model": "github-copilot/claude-sonnet",
     },
     "visual-engineering": {
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro",
       "variant": "high",
     },
     "writing": {
-      "model": "github-copilot/gemini-3-flash-preview",
+      "model": "github-copilot/gemini-3-flash",
     },
   },
 }
@@ -1365,7 +1365,7 @@ exports[`generateModelConfig mixed provider scenarios uses all fallback provider
   },
   "categories": {
     "artistry": {
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro",
       "variant": "high",
     },
     "deep": {
@@ -1386,11 +1386,11 @@ exports[`generateModelConfig mixed provider scenarios uses all fallback provider
       "model": "github-copilot/claude-sonnet",
     },
     "visual-engineering": {
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "github-copilot/gemini-3.1-pro",
       "variant": "high",
     },
     "writing": {
-      "model": "github-copilot/gemini-3-flash-preview",
+      "model": "github-copilot/gemini-3-flash",
     },
   },
 }

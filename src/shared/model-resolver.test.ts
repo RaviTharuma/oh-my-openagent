@@ -524,7 +524,8 @@ describe("resolveModelWithFallback", () => {
       const result = resolveModelWithFallback(input)
 
       // then - should use connected provider (openai) from fallback chain
-      expect(result!.model).toBe("openai/claude-opus-4-6")
+      // and preserve the canonical bundled Claude version punctuation
+      expect(result!.model).toBe("openai/claude-opus-4.6")
       expect(result!.source).toBe("provider-fallback")
       cacheSpy.mockRestore()
     })
@@ -532,6 +533,7 @@ describe("resolveModelWithFallback", () => {
     test("uses github-copilot when google not connected (visual-engineering scenario)", () => {
       // given - user has github-copilot but not google connected
       const cacheSpy = spyOn(connectedProvidersCache, "readConnectedProvidersCache").mockReturnValue(["github-copilot"])
+      const providerModelsSpy = spyOn(connectedProvidersCache, "readProviderModelsCache").mockReturnValue(null)
       const input: ExtendedModelResolutionInput = {
         fallbackChain: [
           { providers: ["google", "github-copilot", "opencode"], model: "gemini-3.1-pro" },
@@ -544,10 +546,11 @@ describe("resolveModelWithFallback", () => {
       const result = resolveModelWithFallback(input)
 
       // then - should use github-copilot (second provider) since google not connected
-      // model name is transformed to preview variant for github-copilot provider
-      expect(result!.model).toBe("github-copilot/gemini-3.1-pro-preview")
+      // model name should follow the current github-copilot transform under bundled metadata
+      expect(result!.model).toBe(`github-copilot/${transformModelForProvider("github-copilot", "gemini-3.1-pro")}`)
       expect(result!.source).toBe("provider-fallback")
       cacheSpy.mockRestore()
+      providerModelsSpy.mockRestore()
     })
 
     test("falls through to system default when no provider in fallback is connected", () => {
