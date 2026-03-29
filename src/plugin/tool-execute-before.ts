@@ -92,7 +92,7 @@ export function createToolExecuteBeforeHandler(args: {
       const sessionId = typeof argsObject.session_id === "string" ? argsObject.session_id : undefined
 
       if (category) {
-        argsObject.subagent_type = "sisyphus-junior"
+        delete argsObject.subagent_type
       } else if (!subagentType && sessionId) {
         const resolvedAgent = await resolveSessionAgent(ctx.client, sessionId)
         argsObject.subagent_type = resolvedAgent ?? "continue"
