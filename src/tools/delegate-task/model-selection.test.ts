@@ -91,7 +91,7 @@ describe("resolveModelForDelegateTask", () => {
 		})
 
 		describe("#when availableModels is empty (cache exists but empty)", () => {
-			test("#then resolves floating explicit user aliases via bundled provider metadata", () => {
+			test("#then keeps floating explicit user aliases stable via bundled provider metadata", () => {
 				const readConnectedProvidersSpy = spyOn(connectedProvidersCache, "readConnectedProvidersCache").mockReturnValue(["openai"])
 
 				const result = resolveModelForDelegateTask({
@@ -99,7 +99,7 @@ describe("resolveModelForDelegateTask", () => {
 					availableModels: new Set(),
 				})
 
-				expect(result).toEqual({ model: "openai/gpt-5.4" })
+				expect(result).toEqual({ model: "openai/gpt-5" })
 				readConnectedProvidersSpy.mockRestore()
 			})
 

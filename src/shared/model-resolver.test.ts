@@ -186,7 +186,7 @@ describe("resolveModelWithFallback", () => {
       expect(result!.model).toBe("anthropic/claude-opus-4-6")
     })
 
-    test("UI selection resolves floating family aliases against available models", () => {
+    test("UI selection keeps floating family aliases stable against available models", () => {
       // given
       const input: ExtendedModelResolutionInput = {
         uiSelectedModel: "anthropic/claude-opus",
@@ -198,7 +198,7 @@ describe("resolveModelWithFallback", () => {
       const result = resolveModelWithFallback(input)
 
       // then
-      expect(result!.model).toBe("anthropic/claude-opus-4-6")
+      expect(result!.model).toBe("anthropic/claude-opus")
       expect(result!.source).toBe("override")
     })
   })
@@ -243,7 +243,7 @@ describe("resolveModelWithFallback", () => {
       expect(result!.source).toBe("override")
     })
 
-    test("config override resolves floating family aliases against available models", () => {
+    test("config override keeps floating family aliases stable against available models", () => {
       // given
       const input: ExtendedModelResolutionInput = {
         userModel: "anthropic/claude-opus",
@@ -256,7 +256,26 @@ describe("resolveModelWithFallback", () => {
 
       // then
       expect(result).toEqual({
-        model: "anthropic/claude-opus-4-6",
+        model: "anthropic/claude-opus",
+        source: "override",
+        variant: undefined,
+      })
+    })
+
+    test("config override keeps gpt family pins stable when only newer minors are available", () => {
+      // given
+      const input: ExtendedModelResolutionInput = {
+        userModel: "openai/gpt-5",
+        availableModels: new Set(["openai/gpt-5.4"]),
+        systemDefaultModel: "google/gemini-3.1-pro",
+      }
+
+      // when
+      const result = resolveModelWithFallback(input)
+
+      // then
+      expect(result).toEqual({
+        model: "openai/gpt-5",
         source: "override",
         variant: undefined,
       })
