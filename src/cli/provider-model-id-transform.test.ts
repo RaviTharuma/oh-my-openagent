@@ -7,7 +7,11 @@ mock.module("../shared/connected-providers-cache", () => ({
 	readProviderModelsCache: () => providerModelsCache,
 }))
 
-let transformModelForProvider: (provider: string, model: string) => string
+let transformModelForProvider: (
+	provider: string,
+	model: string,
+	options?: { allowFamilyFallback?: boolean },
+) => string
 
 beforeAll(async () => {
 	;({ transformModelForProvider } = await import("./provider-model-id-transform"))
@@ -64,6 +68,20 @@ describe("transformModelForProvider", () => {
 			const result = transformModelForProvider("github-copilot", "claude-opus-4-6")
 
 			expect(result).toBe("claude-opus-4.7")
+		})
+
+		test("keeps exact pins stable when family fallback is disabled", () => {
+			providerModelsCache = {
+				models: {
+					"github-copilot": [{ id: "claude-opus-4.7" }],
+				},
+			}
+
+			const result = transformModelForProvider("github-copilot", "claude-opus-4-6", {
+				allowFamilyFallback: false,
+			})
+
+			expect(result).toBe("claude-opus-4.6")
 		})
 	})
 

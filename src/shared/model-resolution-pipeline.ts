@@ -4,6 +4,7 @@ import { fuzzyMatchModel } from "./model-availability"
 import type { FallbackEntry } from "./model-requirements"
 import { transformModelForProvider } from "./provider-model-id-transform"
 import { normalizeModel } from "./model-normalization"
+import { resolveExplicitModel } from "./explicit-model-resolution"
 
 export type ModelResolutionRequest = {
   intent?: {
@@ -46,16 +47,16 @@ export function resolveModelPipeline(
   const fallbackChain = policy?.fallbackChain
   const systemDefaultModel = policy?.systemDefaultModel
 
-  const normalizedUiModel = normalizeModel(intent?.uiSelectedModel)
-  if (normalizedUiModel) {
-    log("Model resolved via UI selection", { model: normalizedUiModel })
-    return { model: normalizedUiModel, provenance: "override" }
+  const resolvedUiModel = resolveExplicitModel(intent?.uiSelectedModel, { availableModels })
+  if (resolvedUiModel) {
+    log("Model resolved via UI selection", { model: resolvedUiModel })
+    return { model: resolvedUiModel, provenance: "override" }
   }
 
-  const normalizedUserModel = normalizeModel(intent?.userModel)
-  if (normalizedUserModel) {
-    log("Model resolved via config override", { model: normalizedUserModel })
-    return { model: normalizedUserModel, provenance: "override" }
+  const resolvedUserModel = resolveExplicitModel(intent?.userModel, { availableModels })
+  if (resolvedUserModel) {
+    log("Model resolved via config override", { model: resolvedUserModel })
+    return { model: resolvedUserModel, provenance: "override" }
   }
 
   const normalizedCategoryDefault = normalizeModel(intent?.categoryDefaultModel)

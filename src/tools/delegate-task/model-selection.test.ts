@@ -52,6 +52,20 @@ describe("resolveModelForDelegateTask", () => {
 
 				expect(result).toEqual({ model: "openai/gpt-5.4" })
 			})
+
+			test("#then canonicalizes legacy explicit aliases even before cache warmup", () => {
+				const result = resolveModelForDelegateTask({
+					userModel: "anthropic/claude-opus-4-6-thinking",
+					categoryDefaultModel: "anthropic/claude-sonnet-4-6",
+					fallbackChain: [
+						{ providers: ["anthropic"], model: "claude-sonnet-4-6" },
+					],
+					availableModels: new Set(),
+					systemDefaultModel: "anthropic/claude-sonnet-4-6",
+				})
+
+				expect(result).toEqual({ model: "anthropic/claude-opus-4-6" })
+			})
 		})
 
 		describe("#when user set fallback_models but no cache exists", () => {
@@ -77,6 +91,18 @@ describe("resolveModelForDelegateTask", () => {
 		})
 
 		describe("#when availableModels is empty (cache exists but empty)", () => {
+			test("#then resolves floating explicit user aliases via bundled provider metadata", () => {
+				const readConnectedProvidersSpy = spyOn(connectedProvidersCache, "readConnectedProvidersCache").mockReturnValue(["openai"])
+
+				const result = resolveModelForDelegateTask({
+					userModel: "openai/gpt-5",
+					availableModels: new Set(),
+				})
+
+				expect(result).toEqual({ model: "openai/gpt-5.4" })
+				readConnectedProvidersSpy.mockRestore()
+			})
+
 			test("#then keeps the category default when its provider is connected", () => {
 				const readConnectedProvidersSpy = spyOn(connectedProvidersCache, "readConnectedProvidersCache").mockReturnValue(["anthropic"])
 

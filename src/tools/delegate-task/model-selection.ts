@@ -5,6 +5,7 @@ import { transformModelForProvider } from "../../shared/provider-model-id-transf
 import { hasConnectedProvidersCache, hasProviderModelsCache, readConnectedProvidersCache } from "../../shared/connected-providers-cache"
 import { log } from "../../shared/logger"
 import { parseModelString, parseVariantFromModelID } from "./model-string-parser"
+import { resolveExplicitModel } from "../../shared/explicit-model-resolution"
 
 function isExplicitHighModel(model: string): boolean {
   return /(?:^|\/)[^/]+-high$/.test(model)
@@ -54,9 +55,23 @@ export function resolveModelForDelegateTask(input: {
   availableModels: Set<string>
   systemDefaultModel?: string
 }): { model: string; variant?: string; fallbackEntry?: FallbackEntry; matchedFallback?: boolean } | { skipped: true } | undefined {
-  const userModel = normalizeModel(input.userModel)
-  if (userModel) {
-    return { model: userModel }
+  const resolvedUserModel = resolveExplicitModel(input.userModel, {
+    availableModels: input.availableModels,
+  })
+  if (resolvedUserModel) {
+    return { model: resolvedUserModel }
+  }
+
+  const explicitUserCategoryModel = input.isUserConfiguredCategoryModel
+    ? resolveExplicitModel(input.categoryDefaultModel, {
+        availableModels: input.availableModels,
+      })
+    : undefined
+  if (explicitUserCategoryModel) {
+    log("[resolveModelForDelegateTask] using user-configured category model", {
+      categoryDefaultModel: explicitUserCategoryModel,
+    })
+    return { model: explicitUserCategoryModel }
   }
 
   const connectedProviders = input.availableModels.size === 0 ? readConnectedProvidersCache() : null
@@ -71,13 +86,6 @@ export function resolveModelForDelegateTask(input: {
   const explicitHighBaseModel = categoryDefault ? getExplicitHighBaseModel(categoryDefault) : null
   const explicitHighModel = explicitHighBaseModel ? categoryDefault : undefined
   if (categoryDefault) {
-    if (input.isUserConfiguredCategoryModel) {
-      log("[resolveModelForDelegateTask] using user-configured category model (bypass validation)", {
-        categoryDefaultModel: categoryDefault,
-      })
-      return { model: categoryDefault }
-    }
-
     if (input.availableModels.size === 0) {
       const categoryProvider = categoryDefault.includes("/") ? categoryDefault.split("/")[0] : undefined
       if (!connectedProviders || !categoryProvider || connectedProviders.includes(categoryProvider)) {

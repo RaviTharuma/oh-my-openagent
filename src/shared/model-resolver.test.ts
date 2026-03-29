@@ -185,6 +185,22 @@ describe("resolveModelWithFallback", () => {
       // then
       expect(result!.model).toBe("anthropic/claude-opus-4-6")
     })
+
+    test("UI selection resolves floating family aliases against available models", () => {
+      // given
+      const input: ExtendedModelResolutionInput = {
+        uiSelectedModel: "anthropic/claude-opus",
+        availableModels: new Set(["anthropic/claude-opus-4-6"]),
+        systemDefaultModel: "google/gemini-3.1-pro",
+      }
+
+      // when
+      const result = resolveModelWithFallback(input)
+
+      // then
+      expect(result!.model).toBe("anthropic/claude-opus-4-6")
+      expect(result!.source).toBe("override")
+    })
   })
 
   describe("Step 2: Config Override", () => {
@@ -224,6 +240,73 @@ describe("resolveModelWithFallback", () => {
 
       // then
       expect(result!.model).toBe("custom/my-model")
+      expect(result!.source).toBe("override")
+    })
+
+    test("config override resolves floating family aliases against available models", () => {
+      // given
+      const input: ExtendedModelResolutionInput = {
+        userModel: "anthropic/claude-opus",
+        availableModels: new Set(["anthropic/claude-opus-4-6"]),
+        systemDefaultModel: "google/gemini-3.1-pro",
+      }
+
+      // when
+      const result = resolveModelWithFallback(input)
+
+      // then
+      expect(result).toEqual({
+        model: "anthropic/claude-opus-4-6",
+        source: "override",
+        variant: undefined,
+      })
+    })
+
+    test("config override canonicalizes legacy aliases against available models", () => {
+      // given
+      const input: ExtendedModelResolutionInput = {
+        userModel: "anthropic/claude-opus-4.6",
+        availableModels: new Set(["anthropic/claude-opus-4-6"]),
+        systemDefaultModel: "google/gemini-3.1-pro",
+      }
+
+      // when
+      const result = resolveModelWithFallback(input)
+
+      // then
+      expect(result!.model).toBe("anthropic/claude-opus-4-6")
+      expect(result!.source).toBe("override")
+    })
+
+    test("config override canonicalizes legacy thinking aliases", () => {
+      // given
+      const input: ExtendedModelResolutionInput = {
+        userModel: "anthropic/claude-opus-4-6-thinking",
+        availableModels: new Set(["anthropic/claude-opus-4-6"]),
+        systemDefaultModel: "google/gemini-3.1-pro",
+      }
+
+      // when
+      const result = resolveModelWithFallback(input)
+
+      // then
+      expect(result!.model).toBe("anthropic/claude-opus-4-6")
+      expect(result!.source).toBe("override")
+    })
+
+    test("config override keeps exact pins stable when only newer family models are available", () => {
+      // given
+      const input: ExtendedModelResolutionInput = {
+        userModel: "anthropic/claude-opus-4-6",
+        availableModels: new Set(["anthropic/claude-opus-4-7"]),
+        systemDefaultModel: "google/gemini-3.1-pro",
+      }
+
+      // when
+      const result = resolveModelWithFallback(input)
+
+      // then
+      expect(result!.model).toBe("anthropic/claude-opus-4-6")
       expect(result!.source).toBe("override")
     })
 
