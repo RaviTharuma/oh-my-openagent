@@ -22,15 +22,20 @@ const REQUIRED_CAPABILITIES = [
 
 type RequiredCapability = (typeof REQUIRED_CAPABILITIES)[number]
 
+// Forward `details` only when present: `console.info(message, undefined)` renders a trailing "undefined".
+function consoleArgs(message: string, details: unknown): [string] | [string, unknown] {
+  return details === undefined ? [message] : [message, details]
+}
+
 const defaultLogger: ComponentLogger = {
   info(message, details) {
-    console.info(message, details)
+    console.info(...consoleArgs(message, details))
   },
   warn(message, details) {
-    console.warn(message, details)
+    console.warn(...consoleArgs(message, details))
   },
   error(message, details) {
-    console.error(message, details)
+    console.error(...consoleArgs(message, details))
   },
 }
 
@@ -100,6 +105,10 @@ export function composeOmoSenpiExtension(
         pi.sendMessage(message, { triggerTurn: true, deliverAs: options.deliverAs }),
       { scheduleFlush: (flush) => void setTimeout(flush, 200) },
     )
+    // senpi emits session_shutdown on the old runner before it invalidates that generation; retire the
+    // shared queue there so a 200ms flush armed before a reload cannot call pi.sendMessage on a stale
+    // API and throw out of the timer queue (uncaughtException -> exit 1).
+    pi.on("session_shutdown", () => idleCoordinator.retire())
 
     // Warm the pi-tui lazy boundary once for the whole extension, before any component registers.
     // Renderers across several components (fallback-architect notices, memory worker entries, task
@@ -112,6 +121,7 @@ export function composeOmoSenpiExtension(
 
     const ctx: ComponentContext = {
       logger,
+      sharedHostEnabled: pi.sharedHostEnabled === true,
       config: {
         getFlag(name) {
           return pi.getFlag(name)

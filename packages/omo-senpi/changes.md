@@ -1,3 +1,28 @@
+## 2026-09-10 — Hide question tools from task children
+
+`TASK_CHILD_UI_ONLY_TOOL_NAMES` now lists `request_user_input` and `ask_user_question` next to `memory`, so in-process children do not inherit the parent-only question tools. RPC children get the matching `--no-ask-user` flag from senpi-task.
+
+## 2026-09-10 — Route user questions in the ultrawork directive through the question tool
+
+Three sentences in `skills/ultrawork/SKILL.md` told the model to stop, surface, or plainly "ask the user" when only the user could unblock the run: blockers left after two re-reviews, two identical failed attempts at one step, and the goal-waiting paragraph that had no user-decision case at all. With senpi's question tool (`request_user_input` / `ask_user_question`) available, ending the turn or marking the goal blocked is the wrong move. The re-review rule now asks through the question tool with the outstanding blockers as options; the retry rule asks through the question tool and continues on best judgment if the question times out; the goal-waiting paragraph gains one sentence stating that a decision only the user can make is asked through the question tool, waiting for the answer when the run cannot proceed without it, and is never recorded as blocked.
+
+`src/components/ultrawork/generated-directive.ts` is regenerated from the source through `plugin/scripts/embed-directive.mjs`; the `--check` drift gate in `ultrawork.test.ts` failed against the edited source and passes after regeneration. The committed bundle `plugin/extensions/omo.js` is rebuilt on the CI-pinned Bun 1.4.0 so the reload test in `ultrawork-arming.test.ts` sees the same directive from the bundle and from the generated module. Heading count of SKILL.md is unchanged (27). The planned wording `wait_for_answer true` was not used because the embed script rejects any `wait_for` token as a non-senpi harness surface; the sentence says "waiting for the answer" instead.
+## 2026-09-09 — Pin persona assets to the payload a process started from
+
+The memory component read each persona markdown from beside the bundle at child-launch time, so the asset had to still be on disk, under its current name, every time a gate fired. The install tree is mutable while a session runs: a global install replaces it in place and the omob launcher rebuilds and prunes runtime dirs. After the Kibitzer rename shipped, sessions whose process had loaded the pre-rename bundle kept opening `extensions/memorian-persona.md` in the replaced tree and every recall gate died with `session_create_failed` (ENOENT). The same shape hit omob runtime dirs on 2026-09-07 through a prune.
+
+Persona filenames now have one definition (`memory-core/src/personas/manifest.ts`), the loaders read through a process-level cache that serves the content the process started with, and the memory component primes all four personas at registration. A read that fails is reported once, naming the asset and its cause, and is never substituted at runtime: a genuinely incomplete payload is a packaging failure, so the packing validators own it. `plugin-artifacts.ts` derives its persona entries from the manifest and is now the single required-artifact list; `script/build-omo-native.ts` re-exports it instead of keeping a hand-copied mirror, which had drifted and stopped requiring `extensions/omo-task.js`, `extensions/omo-member.js` and the gate persona in the published `omo-ai` payload.
+
+## 2026-09-09 — Rename the memory advisor to Kibitzer
+
+Renamed the Memorian implementation, persona asset, packaging references, QA drivers and documentation to Kibitzer. Recall notices now identify Kibitzer instead of the former Aha! wording, and English/Korean model-facing hints name their source.
+
+New entries use `omo-kibitzer:nudged`, `omo-kibitzer:gate` and `omo-kibitzer:recall`. Legacy `omo-memorian:*` entries remain renderable, and both recall channels are excluded from recall search and transcript ingestion. Existing recall settings, hint validation, scheduling, pending files and the separate `memory.nudge` write reminder retain their behavior. Tracking issue: #7993.
+
+## 2026-09-09 — Make thread discovery test paths platform-native
+
+`src/components/thread/live-surface.test.ts` builds agent-home fixture paths and expected socket paths with `node:path`. Windows resolves configured directories to drive-qualified paths and uses backslashes; fixed POSIX literals caused three CI failures and made the fake settings-file lookup miss the intended directory. Override priority, canonical/flat/standalone discovery, and unavailable-host assertions are preserved. Runtime code is unchanged.
+
 ## 2026-09-08 — Regenerate task and member extensions for durable team linkage
 
 Regenerated `plugin/extensions/omo-task.js` and `omo-member.js` with the CI-pinned Bun 1.4.0 build. The shipped extensions now preserve team run, team name, member name, and member role on senpi-task records; the repository's extension freshness check passes.
