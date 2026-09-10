@@ -1,4 +1,5 @@
 import { createAstGrepComponent } from "../components/ast-grep"
+import { createBuiltinMcpsComponent } from "../components/builtin-mcps"
 import { createCommentCheckerComponent } from "../components/comment-checker"
 import { createConfigStartupComponent } from "../components/config-startup"
 import { createConfigWatchComponent } from "../components/config-watch"
@@ -12,6 +13,7 @@ import { createOnboardingComponent } from "../components/onboarding"
 import { createSkillPointersComponent } from "../components/skill-pointers"
 import { createOmoNativeTelemetryComponent } from "../components/telemetry"
 import { createTodoFanoutReminderComponent } from "../components/todo-fanout-reminder"
+import { createThreadComponent } from "../components/thread"
 import { createUltraworkComponent } from "../components/ultrawork"
 import { createUlwExecuteContinuationComponent } from "../components/ulw-execute-continuation"
 import { createUlwLoopComponent } from "../components/ulw-loop"
@@ -33,10 +35,12 @@ export function createOmoSenpiComponents(taskComponent: OmoSenpiComponent): OmoS
     createGitMasterAttributionComponent(),
     createFallbackArchitectComponent(),
     createAstGrepComponent(),
+    createBuiltinMcpsComponent(),
     createLspComponent(),
     createXSearchComponent(),
     createCommentCheckerComponent(),
     taskComponent,
+    createThreadComponent(),
     createMemoryComponent(),
     createConfigWatchComponent(),
   ]
