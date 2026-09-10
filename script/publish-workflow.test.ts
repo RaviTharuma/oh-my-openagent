@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process"
 const ciWorkflowPath = new URL("../.github/workflows/ci.yml", import.meta.url)
 const publishWorkflowPath = new URL("../.github/workflows/publish.yml", import.meta.url)
 const workflowsDir = new URL("../.github/workflows/", import.meta.url)
-const pinnedBunVersion = 'bun-version: "1.4.0"'
+const pinnedBunVersion = 'bun-version: "1.4.2"'
 const workflowPaths = readdirSync(workflowsDir)
   .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
   .map((name) => new URL(name, workflowsDir))
@@ -17,7 +17,7 @@ const workflowChecks = [
     path: ciWorkflowPath,
     testRuns: [
       "run: bun test",
-      "run: bun test packages/omo-opencode/src/shared/dist-bundle-bun-globals.test.ts",
+      "run: bun test --timeout 20000 packages/omo-opencode/src/shared/dist-bundle-bun-globals.test.ts",
     ],
   },
 ]
@@ -318,7 +318,7 @@ describe("test workflows", () => {
       const unpinnedBunLines = bunVersionLines.filter((line) => line !== pinnedBunVersion)
 
       // #then
-      expect(unpinnedBunLines, `${workflowPath.pathname} must pin Bun to 1.4.0`).toEqual([])
+      expect(unpinnedBunLines, `${workflowPath.pathname} must pin Bun to 1.4.2`).toEqual([])
     }
   })
 

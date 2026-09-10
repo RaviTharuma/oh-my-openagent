@@ -6,14 +6,14 @@ Use GPT-5.x style: outcome-first, evidence-bound, atomic decisions, no nested br
 Deliver every goal in `.omo/ulw-loop/goals.json` end-to-end.
 Prove EVERY success criterion with captured observable evidence from a real-usage scenario you ran (HTTP / tmux / browser / computer-use below).
 TESTS ALONE NEVER PROVE DONE. A green test suite is supporting evidence, not completion proof.
-Audit each pass, fail, block, steering change, and checkpoint in `.omo/ulw-loop/ledger.jsonl`.
+Audit each pass, fail, block, steering change, and checkpoint in `.omo/ulw-loop/<session-id>/ledger.jsonl`.
 
 ## Manual-QA channels
 Run each criterion's real-surface proof yourself through the channel that faithfully exercises it; capture the artifact before recording PASS.
 
 1. **HTTP call** — hit the live endpoint with `curl -i` (or a Playwright APIRequestContext); capture status line + headers + body.
 2. **Terminal / TUI** - prove it through the xterm.js web terminal; tmux `send-keys` is fine for a boot smoke, but NEVER `tmux capture-pane` for color/layout/CJK evidence (it degrades truecolor).
-3. **Browser use** — in omo-senpi, use `browser:control-in-app-browser` first when available and the scenario does not need an authenticated or persistent user browser profile. Otherwise use Chrome to drive the REAL page; if unavailable, use agent-browser. Capture action log + screenshot path. Never downgrade a browser-facing criterion.
+3. **Browser use** — drive the REAL page from the eval js kernel: `new Bun.WebView()` (navigate/click/evaluate/screenshot) by default, `playwright-core` when a real Chrome build or its trace is required, and the `agent-browser` CLI only when no kernel path exists. Capture action log + screenshot path. Never downgrade a browser-facing criterion.
 4. **Computer use** — for desktop/GUI apps, drive the running app via OS automation (computer-use, AppleScript, xdotool, etc.); capture action log + screenshot.
 
 For TUI visual QA (mandatory when a PR or review must inspect the terminal screen),
@@ -64,13 +64,16 @@ Resolve the CLI from the ulw-loop skill-pointer message: it carries the resolved
 
 Run one form:
 ```sh
-omo-agent-toolkit ulw-loop create-goals --brief "<brief>" [--validation-batch-json <json-or-path>] --json
-omo-agent-toolkit ulw-loop create-goals --brief-file <path> [--validation-batch-json <json-or-path>] --json
-cat <brief> | omo-agent-toolkit ulw-loop create-goals --from-stdin [--validation-batch-json <json-or-path>] --json
+omo-agent-toolkit ulw-loop create-goals --session-id <id> --brief "<brief>" [--validation-batch-json <json-or-path>] --json
+omo-agent-toolkit ulw-loop create-goals --session-id <id> --brief-file <path> [--validation-batch-json <json-or-path>] --json
+cat <brief> | omo-agent-toolkit ulw-loop create-goals --session-id <id> --from-stdin [--validation-batch-json <json-or-path>] --json
 ```
-If the existing aggregate is already complete, do not steer or force the
-completed default state for unrelated new work. Start a fresh run with
-`omo-agent-toolkit ulw-loop create-goals --session-id <new-id> ...`; use `--force`
+Every state subcommand runs against exactly one session scope: pass `--session-id <id>` on every call (the ulw-loop skill-pointer message carries this session's id next to the CLI path; `PI_SESSION_ID`, `CODEX_THREAD_ID`, `CODEX_SESSION_ID`, or `OMO_ULW_LOOP_SESSION_ID` in the environment also resolve it). The CLI refuses with `ULW_LOOP_SESSION_SCOPE_REQUIRED` when neither is present instead of touching the shared `.omo/ulw-loop` root, because eval kernels, subprocesses, and hooks do not inherit the session env and every session in the directory would otherwise read and overwrite the same plan. Mutations are serialized across processes by `.omo/ulw-loop/<id>/.state.lock`, so parallel `record-evidence` calls from several workers are safe; `ULW_LOOP_LOCK_TIMEOUT` means another live process held the state for more than 10s — retry, never delete the lock while that process is alive.
+If this session's aggregate is already complete, do not steer or force the
+completed state for unrelated new work. Start a fresh run with
+`omo-agent-toolkit ulw-loop create-goals --session-id <new-id> ...` and keep passing
+that id on every later call; the host's automatic continuation follows only the
+session's own id, so a run under a custom id is resumed by hand. Use `--force`
 only when deliberately overwriting completed evidence.
 Write state through the CLI path. Do not hand-edit state files.
 
@@ -90,7 +93,7 @@ Use channel-table evidence verbs — not vibes.
 Revise any criterion that lacks observable `expectedEvidence` or a named channel before execution.
 
 ### 3. Inspect state
-Run `omo-agent-toolkit ulw-loop status --json`.
+Run `omo-agent-toolkit ulw-loop status --session-id <id> --json`.
 Read pending goals, criteria IDs, current ledger head, blockers, and aggregate omo-senpi objective.
 
 ## Execution Loop
@@ -163,6 +166,8 @@ Trigger only for the final aggregate goal after every criterion in every goal is
 ```sh
 omo-agent-toolkit ulw-loop checkpoint --goal-id <id> --status complete --evidence "<e2e evidence + manual QA notes>" --codex-goal-json <snapshot> --quality-gate-json <json-or-path> --json
 ```
+`--quality-gate-json` shape. In `manualQa.artifactRefs`, `kind` must be one of `cli-transcript`, `log`, `screenshot`, `image`, `http-dump`, or `data-diff`; review and QA reports belong in `codeReview.reportPath` or `gateReview.reportPath`, not `artifactRefs`. `surfaceEvidence.surface` must be one of `cli`, `http`, `tmux`, `browser`, `gui`, or `data`. Compatibility is `cli`/`tmux` -> `cli-transcript`/`log`, `http` -> `http-dump`, `browser`/`gui` -> `screenshot`/`image`, and `data` -> `data-diff`.
+
 `--quality-gate-json` shape:
 ```json
 {
