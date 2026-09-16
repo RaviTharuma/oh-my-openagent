@@ -2,7 +2,7 @@ import type { ExecutionMode, StartResult } from "../../manager"
 import type { ToolProgressDetails } from "../../progress"
 import type { TaskRecord } from "../../state"
 import type { TaskToolParamsStatic } from "./params"
-import type { TaskSkillSummary, TaskToolDetails, TaskToolMode } from "./types"
+import type { TaskHandleDetails, TaskSkillSummary, TaskToolDetails, TaskToolMode } from "./types"
 
 export type SingleSpawnParams = Omit<TaskToolParamsStatic, "prompt" | "tasks"> & { readonly prompt: string }
 
@@ -27,9 +27,10 @@ export function recordSummary(record: TaskRecord, includeLifecycle?: boolean) {
   }
 }
 
-export function recordDetails(record: TaskRecord, mode: TaskToolMode): TaskToolDetails {
+export function recordDetails(record: TaskRecord, mode: TaskToolMode): TaskToolDetails & TaskHandleDetails {
   return {
     ...recordSummary(record),
+    run_epoch: record.notification.run_epoch,
     mode,
     subagent_type: record.agent_type,
     resolved_model: record.resolved_model,
@@ -43,19 +44,16 @@ export function startedDetails(
   params: SingleSpawnParams,
   executionMode: ExecutionMode,
   skills?: TaskSkillSummary,
-  legacySubagentType?: string,
 ): TaskToolDetails {
   return {
     task_id: started.task_id,
+    ...(started.run_epoch === undefined ? {} : { run_epoch: started.run_epoch }),
     status: started.status,
     mode: "spawn",
     task_summary: params.task_summary,
     name: started.name,
     category: params.category,
     subagent_type: params.subagent_type,
-    // Additive, in-memory only (the todo-1 pattern): the retired id the caller submitted rides
-    // next to the canonical subagent_type without widening TaskToolDetails.
-    ...(legacySubagentType !== undefined && { legacy_subagent_type: legacySubagentType }),
     execution_mode: executionMode,
     model: params.model,
     resolved_model: started.resolved_model,
@@ -71,7 +69,6 @@ export function partialDetails(
   executionMode: ExecutionMode,
   progress: ToolProgressDetails,
   skills?: TaskSkillSummary,
-  legacySubagentType?: string,
 ): TaskToolDetails & ToolProgressDetails {
-  return { ...startedDetails(started, params, executionMode, skills, legacySubagentType), ...progress }
+  return { ...startedDetails(started, params, executionMode, skills), ...progress }
 }
