@@ -13,7 +13,6 @@ const pkgDir = resolve(repoRoot, "packages", "omo-native")
 
 const REQUIRED_ARTIFACTS = [
   "bin/omo.js",
-  "bin/omo-agent-toolkit.js",
   "plugin/package.json",
   "plugin/CHANGELOG.md",
   "plugin/extensions/omo.js",
@@ -22,11 +21,8 @@ const REQUIRED_ARTIFACTS = [
   "plugin/skills-conditional/x-search/SKILL.md",
   "plugin/runtime/lsp-daemon/dist/cli.js",
   "plugin/runtime/ast-grep-mcp/cli.js",
-  "plugin/runtime/agent-toolkit/cli.js",
-  "plugin/runtime/agent-toolkit/ulw-loop/cli.js",
-  "plugin/runtime/agent-toolkit/omo-agent-toolkit",
-  "plugin/runtime/agent-toolkit/omo-agent-toolkit.cmd",
   "plugin/runtime/dag/sdk.js",
+  "plugin/runtime/agent-toolkit-sdk/sdk.js",
 ]
 
 const MIN_SKILL_COUNT = 18
