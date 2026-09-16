@@ -24,9 +24,8 @@ describe("idle-injection wiring: real producers on one idle edge", () => {
     const logger = createLogger()
     const outputs = [activeStatus()]
     await createUlwLoopComponent({
-      resolveOmoBin: () => "/tmp/omo",
       planExists: () => true,
-      runCommand: async () => ({ code: 0, stdout: outputs.shift() ?? activeStatus() }),
+      readStatus: async () => ({ code: 0, stdout: outputs.shift() ?? activeStatus() }),
     }).register(pi, { logger, config: { getFlag: () => false }, idleCoordinator: coordinator })
 
     // when the ulw continuation fires at turn end (enqueues, defers its flush)
@@ -59,7 +58,7 @@ describe("idle-injection wiring: real producers on one idle edge", () => {
     // then exactly one injection carried both, completion first, via the coordinator (no plaintext races)
     expect(delivered).toHaveLength(1)
     expect(delivered[0]).toContain("task st_done completed")
-    expect(delivered[0]).toContain("Continue the active omo-agent-toolkit ulw-loop run")
+    expect(delivered[0]).toContain("Continue the active ulw-loop run")
     expect(pi.userMessages).toEqual([])
   })
 })
