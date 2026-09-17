@@ -13,10 +13,10 @@ describe("remapAgentKeysToDisplayNames", () => {
     // when remapping
     const result = remapAgentKeysToDisplayNames(agents)
 
-    // then known agents get display name keys plus hidden config-key aliases
+    // then known agents get display name keys only; config keys are not copied
     expect(result[getAgentListDisplayName("sisyphus")]).toBeDefined()
     expect(result["oracle"]).toBeDefined()
-    expect(result["sisyphus"]).toMatchObject({ hidden: true })
+    expect(result["sisyphus"]).toBeUndefined()
   })
 
   it("preserves unknown agent keys unchanged", () => {
@@ -48,26 +48,26 @@ describe("remapAgentKeysToDisplayNames", () => {
     // when remapping
     const result = remapAgentKeysToDisplayNames(agents)
 
-    // then all get display name keys
+    // then all get display name keys and original config keys are gone
     expect(result[getAgentListDisplayName("sisyphus")]).toBeDefined()
-    expect(result["sisyphus"]).toMatchObject({ hidden: true })
+    expect(result["sisyphus"]).toBeUndefined()
     expect(result[getAgentListDisplayName("hephaestus")]).toBeDefined()
-    expect(result["hephaestus"]).toMatchObject({ hidden: true })
+    expect(result["hephaestus"]).toBeUndefined()
     expect(result[getAgentListDisplayName("prometheus")]).toBeDefined()
-    expect(result["prometheus"]).toMatchObject({ hidden: true })
+    expect(result["prometheus"]).toBeUndefined()
     expect(result[getAgentListDisplayName("atlas")]).toBeDefined()
-    expect(result["atlas"]).toMatchObject({ hidden: true })
+    expect(result["atlas"]).toBeUndefined()
     expect(result[getAgentDisplayName("athena")]).toBeDefined()
-    expect(result["athena"]).toMatchObject({ hidden: true })
+    expect(result["athena"]).toBeUndefined()
     expect(result[getAgentDisplayName("metis")]).toBeDefined()
-    expect(result["metis"]).toMatchObject({ hidden: true })
+    expect(result["metis"]).toBeUndefined()
     expect(result[getAgentDisplayName("momus")]).toBeDefined()
-    expect(result["momus"]).toMatchObject({ hidden: true })
+    expect(result["momus"]).toBeUndefined()
     expect(result[getAgentDisplayName("sisyphus-junior")]).toBeDefined()
-    expect(result["sisyphus-junior"]).toMatchObject({ hidden: true })
+    expect(result["sisyphus-junior"]).toBeUndefined()
   })
 
-  it("emits config-key aliases as hidden so CLI lookup works without a second TUI row", () => {
+  it("does not emit config-key alias copies at remap time", () => {
     // given one remapped agent
     const agents = {
       sisyphus: { prompt: "test", mode: "primary" },
@@ -76,11 +76,11 @@ describe("remapAgentKeysToDisplayNames", () => {
     // when remapping
     const result = remapAgentKeysToDisplayNames(agents)
 
-    // then display key is visible and config key is a hidden alias
+    // then only the display-name row exists; aliases are attached after applyToolConfig
     const display = getAgentListDisplayName("sisyphus")
     expect(result[display]).toMatchObject({ prompt: "test", mode: "primary" })
     expect((result[display] as { hidden?: boolean }).hidden).not.toBe(true)
-    expect(result["sisyphus"]).toMatchObject({ prompt: "test", mode: "primary", hidden: true, name: display })
+    expect(result["sisyphus"]).toBeUndefined()
   })
 
   it("returns runtime core agent list names in canonical order", () => {
@@ -198,18 +198,14 @@ describe("remapAgentKeysToDisplayNames", () => {
     // when remapping
     const result = remapAgentKeysToDisplayNames(agents)
 
-    // then the visible row is the clean literal display name; config key is hidden
+    // then the only row is the clean literal display name
     const displayName = getAgentListDisplayName("sisyphus")
-    const visible = Object.keys(result).filter((key) => {
-      const value = result[key]
-      return !(typeof value === "object" && value !== null && (value as { hidden?: boolean }).hidden === true)
-    })
-    expect(visible).toEqual([displayName])
+    expect(Object.keys(result)).toEqual([displayName])
     expect(result[displayName]).toEqual({
       name: displayName,
       foo: "bar",
     })
-    expect(result["sisyphus"]).toMatchObject({ hidden: true, name: displayName })
+    expect(result["sisyphus"]).toBeUndefined()
   })
 
   describe("displayName i18n override (#4004)", () => {
