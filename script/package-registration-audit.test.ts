@@ -21,6 +21,7 @@ const corePackagePaths: readonly string[] = [
   "packages/team-core",
   "packages/openclaw-core",
   "packages/boulder-state",
+  "packages/isolation-core",
   "packages/memory-core",
   "packages/telemetry-core",
   "packages/claude-code-compat-core",
@@ -38,8 +39,6 @@ const adapterPackagePaths: readonly string[] = [
   "packages/omo-senpi",
   "packages/senpi-task",
   "packages/omo-opencode",
-  "packages/pi-goal",
-  "packages/pi-webfetch",
   "packages/omo-native",
 ] as const
 const skillPackagePaths: readonly string[] = ["packages/shared-skills"] as const

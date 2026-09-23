@@ -11,10 +11,10 @@ export const REQUIRED_PLUGIN_ARTIFACTS: readonly string[] = [
   join("extensions", "omo.js"),
   join("extensions", "omo-task.js"),
   join("extensions", "omo-member.js"),
-  join("extensions", "omo-agent-toolkit.js"),
   join("extensions", "memory-run-supervisor.mjs"),
   ...PERSONA_ASSET_FILES.map((filename) => join("extensions", filename)),
   join("skills", "ast-grep", "SKILL.md"),
+  join("skills", "browser", "SKILL.md"),
   join("skills", "coding-agent-sessions", "SKILL.md"),
   join("skills", "debugging", "SKILL.md"),
   join("skills", "frontend", "SKILL.md"),
@@ -33,6 +33,7 @@ export const REQUIRED_PLUGIN_ARTIFACTS: readonly string[] = [
   join("skills", "ulw-research", "SKILL.md"),
   join("skills", "visual-qa", "SKILL.md"),
   join("skills-conditional", "x-search", "SKILL.md"),
+  join("runtime", "agent-toolkit-sdk", "sdk.js"),
   join("runtime", "ast-grep-mcp", "cli.js"),
   join("runtime", "lsp-daemon", "dist", "cli.js"),
   join("runtime", "lsp-daemon", "dist", "index.js"),
@@ -42,6 +43,8 @@ export const REQUIRED_PLUGIN_ARTIFACTS: readonly string[] = [
   join("runtime", "lsp-daemon", "dist", "package.json"),
   join("runtime", "lsp-daemon", "dist", ".omo-runtime-manifest.json"),
   join("scripts", "install.mjs"),
+  // The task daemon's launch spec: without it `omo daemon run` fails closed on every install.
+  "daemon-launch-spec.json",
 ]
 
 export async function ensurePluginArtifacts(context: {

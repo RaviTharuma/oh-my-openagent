@@ -1,6 +1,7 @@
 import type { ToolDefinition } from "@code-yeongyu/senpi"
 
 import type { IdleInjectionCoordinator } from "./idle-injection-coordinator"
+import type { StartupWork } from "./startup-deferral"
 
 export interface CompactReadClassification {
   readonly kind: "docs" | "resource" | "skill" | "memory"
@@ -14,13 +15,19 @@ export type ReadClassifier = (input: {
 }) => CompactReadClassification | undefined
 
 export interface SenpiExtensionAPI {
-  readonly sharedHostEnabled?: boolean
   /**
    * Absolute cwd of the session this extension instance was loaded for. senpi builds one
    * ExtensionAPI per session and already knows the value at load time. Optional because hosts
    * older than the release that added it do not report one; consumers fall back to process.cwd().
    */
   readonly cwd?: string
+  /**
+   * Opaque labels the opener attached to THIS session (senpi `open_session.context`). One extension
+   * set serves every session of the shared daemon, so components gate themselves on the role here
+   * instead of on process-wide environment variables. Optional: hosts older than the release that
+   * added it report none, and consumers fall back to the per-child process env.
+   */
+  readonly sessionContext?: unknown
   on(event: string, handler: (payload: unknown, ctx?: unknown) => unknown | Promise<unknown>): void
   rpc?: {
     emit(name: string, data: unknown): void
@@ -61,7 +68,6 @@ export interface ComponentLogger {
 
 export interface ComponentContext {
   logger: ComponentLogger
-  sharedHostEnabled?: boolean
   config: {
     getFlag(name: string): boolean | string | undefined
   }
@@ -71,6 +77,10 @@ export interface ComponentContext {
   // Single-queue idle-edge injection arbiter (todo 17). When present, ulw-loop continuation and task
   // completion wakes route through it so one idle edge yields exactly one injection.
   idleCoordinator?: IdleInjectionCoordinator
+  // Off-critical-path scheduler for startup work that must happen but is not needed before the
+  // first user turn (see startup-deferral.ts). Absent in isolated component unit tests, where
+  // `deferUntilAfterFirstPaint` runs the work inline instead.
+  deferStartupWork?: (label: string, work: StartupWork) => void
 }
 
 export interface OmoSenpiComponent {
