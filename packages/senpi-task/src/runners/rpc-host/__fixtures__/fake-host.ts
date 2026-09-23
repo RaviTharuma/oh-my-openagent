@@ -1,11 +1,12 @@
 import { mkdtempSync, rmSync } from "node:fs"
 import { createServer, type Server, type Socket } from "node:net"
 import { tmpdir } from "node:os"
-import { basename, join } from "node:path"
+import { join } from "node:path"
 
 import type { SenpiHostProtocolInfo } from "../../../lazy/senpi-barrel"
 import { FakeSessionTable, type FakeDrainedSession, type FakeHostSession } from "./fake-host-sessions"
 import { fakeProtocolInfo, probeFakeHost, type FakeHostIdentityOptions } from "./fake-host-probe"
+import { fakeHostTransport, type FakeHostTransport } from "./fake-host-transport"
 import { handleWireLine, writeFrame, type FakeHostCommand, type FakeHostOpenFailure } from "./fake-host-wire"
 
 /**
@@ -54,6 +55,8 @@ export interface FakeHost {
   releasePath(sessionPath: string): void
   /** A newer generation takes the socket: sessions park, their paths drain, the instance rotates. */
   handoff(nextInstanceId?: string): void
+  /** Destroy every client connection while every session stays open on the host (a stall cut). */
+  cutConnections(): void
   crash(): void
   restart(): Promise<void>
   waitForCommand(type: string): Promise<FakeHostCommand>
@@ -64,9 +67,14 @@ export interface FakeHost {
 
 export async function startFakeHost(options: FakeHostOptions = {}): Promise<FakeHost> {
   const dir = mkdtempSync(join(tmpdir(), "dh-fake-"))
-  // A unix socket path on POSIX; on win32 net.Server can only listen on a named pipe, which is
-  // also what the real engine host uses there, so the same session logic is exercised on both.
-  const socketPath = process.platform === "win32" ? `\\\\.\\pipe\\dh-fake-${basename(dir)}` : join(dir, "rpc.sock")
+  // The logical socket path on every platform; on win32 the transport derives the named pipe and
+  // the secret from it, exactly as the engine's client does, so the same session logic runs there.
+  const socketPath = join(dir, "rpc.sock")
+  // Derived inside `listen` so a restart never re-binds the address its predecessor may still hold.
+  // On win32 the pipe instance can outlive `server.close()` while a client handle lingers, so one
+  // fixed derivation makes restart race itself with EADDRINUSE. Re-deriving also rotates
+  // `<path>.secret`, which is how the real host behaves and how clients already resolve the address.
+  let transport: FakeHostTransport
   const drainRetryAfterMs = options.drainRetryAfterMs ?? 2_000
   const table = new FakeSessionTable({ transcripts: options.transcripts === true })
   const commands: FakeHostCommand[] = []
@@ -101,7 +109,8 @@ export async function startFakeHost(options: FakeHostOptions = {}): Promise<Fake
   }
 
   const listen = async (): Promise<void> => {
-    server = createServer((socket) => {
+    transport = fakeHostTransport(socketPath)
+    server = createServer((socket) => transport.authenticate(socket, () => {
       sockets.add(socket)
       settleConnectionWaiters()
       let buffer = ""
@@ -122,8 +131,8 @@ export async function startFakeHost(options: FakeHostOptions = {}): Promise<Fake
         table.detach(socket)
         settleConnectionWaiters()
       })
-    })
-    await new Promise<void>((resolve) => server.listen(socketPath, resolve))
+    }))
+    await new Promise<void>((resolve) => server.listen(transport.listenAddress, resolve))
   }
   await listen()
 
@@ -178,6 +187,7 @@ export async function startFakeHost(options: FakeHostOptions = {}): Promise<Fake
     completeTurn: (routingId, text) => {
       const message = { role: "assistant", content: [{ type: "text", text }], stopReason: "stop" }
       table.appendTranscript(routingId, message)
+      table.setStreaming(routingId, false)
       sendTo(routingId, { type: "message_end", message })
       sendTo(routingId, { type: "agent_end", willRetry: false, messages: [message] })
     },
@@ -204,6 +214,7 @@ export async function startFakeHost(options: FakeHostOptions = {}): Promise<Fake
       }
       endConnections()
     },
+    cutConnections: () => dropConnections(),
     crash: () => {
       table.clear()
       dropConnections()
