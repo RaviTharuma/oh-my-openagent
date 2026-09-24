@@ -1,3 +1,51 @@
+## 2026-09-24 - omo setup carries OpenCode custom providers into models.json and auth.json (#8836)
+
+### What changed
+
+`bin/lib/setup-opencode-providers.js` (new, read-only) reads the `provider` section of the OpenCode user config through the MCP reader's own resolution and merge (`setup-opencode-assets.js` now exports that reader as `readOpencodeSection(files, section, label, notices)`, plus `convertPlaceholders` / `unconvertedPlaceholder`; the MCP path calls it with `"mcp"` and keeps its notices). Each custom provider becomes the engine's `models.json` entry in the shape `model-config-schema.js` `ProviderConfigSchema` validates and `provider-composer.js` `modelFromJson` composes: `name`, `baseUrl`, `api` at provider level, `headers` from `options.headers`, and `models[]` with `id`, `name`, `contextWindow` / `maxTokens` from `limit.context` / `limit.output`, `reasoning`, `input` from `modalities.input` (text/image/video), a per-model `api` when a model names its own `provider.npm`, and `upstreamModelId` when an OpenCode model `id` differs from its key (the engine sends it as the request model id, `model-runtime.js`). The key follows OpenCode's own order (`provider.ts`): `options.apiKey`, else the opencode `auth.json` `api` entry, else the single env var `env` names. A key is escaped with the engine's literal escapes (`$$`, `$!`) and `{env:NAME}` becomes `${NAME}`, so the engine resolves to the bytes OpenCode would have sent.
+
+Two conversions exist because the SDKs disagree about the base URL. `@ai-sdk/anthropic` posts to `<baseURL>/messages` (default `https://api.anthropic.com/v1`) while the engine's Anthropic client appends `/v1/messages` (its builtin base is `https://api.anthropic.com`), so the trailing `/v1` is removed, and an Anthropic base without one is reported instead of guessed. A baseURL that is itself a `{env:...}` or `{file:...}` placeholder has no engine spelling and is also reported.
+
+`bin/lib/setup-providers-import.js` (new) is the stage itself, with the credential and asset stages' detect -> preview -> consent -> write shape and the same `confirm`. A provider id already in `models.json` is `providers-skipped-existing` and its key is not written either, because a key only rides with the provider it belongs to. A key id already in `auth.json` is kept. `models.json` is read comment-tolerant like the engine reads it, left untouched when `providers` is not an object, and written atomically at 0600 with a `.bak-` copy; every other top-level key (`disabledProviders`, ...) is preserved.
+
+`bin/lib/auth-store.js` (new) takes the auth.json read/escape/backup/write code verbatim out of `setup-import.js`, so both stages write keys the same way. `setup-import.js` plans the providers once up front, passes `customProviders` to `printModelReport`, which drops only the placeholder template when a real provider was found, passes the planned ids to the credential stage, which stops listing them as `skipped-unmapped`, and runs the provider stage after the asset stage.
+
+### Why
+
+After #8799 and #8803, custom providers were the one hand-configured OpenCode asset setup did not carry. Once they had been set up by hand, the user was left reading the engine's `models.json` schema.
+
+### Expected merge conflict zones
+
+`bin/lib/setup-import.js` `runSetup` (every setup stage lands there), `bin/lib/setup-models.js` (the report rewrite lane).
+
+||||||| 0009632c6
+
+||||||| 2a04ce61b
+
+## 2026-09-24 - omo doctor reports the OpenCode-edition migration leftovers (#8831)
+
+`omo doctor` said nothing about the machine it had just been migrated from: an `omo` earlier on PATH than omo-ai's, the legacy `oh-my-openagent` / `oh-my-opencode` package still installed globally (the one whose `npm uninstall -g` can take omo-ai's `omo` with it, #8793), and the OpenCode plugin still registered in the OpenCode config. `packages/omo-native/bin/lib/doctor-migration.js` is new and adds three report-only checks, printed right after the `INFO Update:` line; `doctor.js` only imports and calls it.
+
+- PATH: every absolute PATH dir except a project `node_modules/.bin` is scanned for `omo` (plus `.cmd`/`.ps1`/`.exe` on Windows). Each entry's owner is the nearest `package.json` above its resolved symlink or above the package path its launcher shim names; a Codex Light wrapper (`# OMO_GENERATED_RUNTIME_WRAPPER`) is `lazycodex@<cached version>`. Every entry before omo-ai's own, or every entry when omo-ai is not on PATH, gets a `WARN another omo precedes omo-ai on PATH: <file> (<owner>)`. The fix is `bunx oh-my-openagent@beta install --platform=native` when the installer repairs that owner (oh-my-openagent / oh-my-opencode / lazycodex); otherwise it is "remove that file, or move <omo-ai bin dir> ahead of <dir> on PATH". The owner rules mirror `packages/omo-opencode/src/cli/install-native/legacy-omo-bin.ts`, which omo-native cannot import.
+- Legacy package: `oh-my-openagent` / `oh-my-opencode` under an npm global prefix (`npm_config_prefix`, `~/.npmrc` `prefix=`, and the prefix implied by every PATH bin dir) or under the bun global tree (`$BUN_INSTALL/install/global/node_modules`, default `~/.bun`). The warning names the package dir. For npm the remove command is `npm uninstall -g <pkg>`, followed by the doctor's own update command if `omo` disappears; for bun it is `bun remove -g <pkg>`.
+- OpenCode registration: every server config file `bin/lib/setup-opencode-assets.js` `opencodeConfigSources` names (the global dir's `config.json` / `opencode.json` / `opencode.jsonc`, `$OPENCODE_CONFIG`, then `~/.opencode` and `$OPENCODE_CONFIG_DIR`, layered the way OpenCode reads them), plus `tui.json` / `tui.jsonc` in each of those dirs, is parsed with `bin/lib/jsonc.js`. Any `plugin` entry naming a legacy package (`<pkg>`, `<pkg>@...`, `<pkg>/tui...`, string or `[name, options]` tuple) yields one `INFO OpenCode still loads the <pkg> plugin (<files>)` line. An unparsable file is skipped because OpenCode reports its own config errors.
+
+Nothing is deleted or rewritten. `runDoctor` options gain `env` / `homeDir` / `platform`, following the existing `env` injection, so `test/doctor-migration.test.ts` runs every check against fixture trees and never reads the real PATH or home.
+
+||||||| 07452eda9
+## 2026-09-24 - omo update runs the detected package-manager command (#8830)
+
+### What changed
+
+`bin/lib/package-paths.js` `updateTarget()` keeps `manager` and `command` and adds `argv` plus, for a bun-global layout, `env.BUN_INSTALL`. The printed bun command is `bun add -g omo-ai@beta`; the `--cwd <package dir>` form is dropped because bun ignores `--cwd` for `-g` and still installs into the ambient `BUN_INSTALL` / `~/.bun`. `bin/lib/self-update.js` is new: it prints the command, returns on `--dry-run`/`--print`, otherwise spawns through `runChild` (injectable `run` for tests), streams stdio, and reports before/after versions or a non-zero retry line. `bin/lib/launcher.js` `isSelfUpdate` calls it. Tests in `test/self-update.test.ts` and `test/launcher.test.ts`.
+
+### Why
+
+`omo update` did not update. The copy-paste command was also wrong for bun-global installs that were not the ambient prefix.
+
+### Why an extension could not handle it
+
+Self-update is answered in the launcher before the engine is spawned, so the product package (not the pinned engine) is what moves.
 ## 2026-09-24 - omo setup imports every OpenCode key an omo provider can serve, and names the real sign-in command (#8799)
 
 ### What changed
