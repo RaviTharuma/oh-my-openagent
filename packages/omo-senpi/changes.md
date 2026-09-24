@@ -1,3 +1,42 @@
+## ulw-plan: the affected user's ideal state is the north star, recorded in the draft and proven in the plan
+
+`skills/ulw-plan/SKILL.md` replaces the "Decision-complete is the north star" / "Full scope is the
+default" invariants with "The ideal state for the affected user is the north star" (who the output
+touches, how they use it, IS rows and GAP rows with reasons, MVP never invented, ideal > request said in
+one line and planned) and "Decision-complete is how the plan gets there"; the opening preview announces
+user / ideal state / gaps before the intent verdict and filter (2) resolves forks against the ideal
+state before a default. `references/full-workflow.md`: `## North star` rewrite, a "Define the ideal
+state" step closing Phase 1, the brief leads with user / IS / GAP rows, self-review and the consultant
+ask cover IS/GAP coverage, F4 becomes ideal-state fidelity, handoff item 2 names the user, and the
+convergence contract gains the `ideal_state_row_unmapped_or_unreachable_for_the_affected_user`
+blocker category. `intent-clear.md` / `intent-unclear.md` reframe the resolver, add the user/IS/GAP
+clearance item, and rework the worked examples. `scripts/scaffold-plan.mjs` keeps the path guards and
+re-exports the emitted text from the new `scripts/plan-templates.mjs` (draft `## Affected user and
+ideal state` ledger; plan `### Affected user and ideal state` under Scope, TL;DR "Who this is for"
+line, `Closes: GAP-<n>` per todo, `F4. Ideal-state fidelity`, `## Success criteria` IS -> todo -> QA
+-> evidence table). `plugin/extensions/omo-task.js` regenerated under Node 24 for the senpi-task agent
+prompt change (see `packages/senpi-task/changes.md`). omo#8773.
+
+## memory: a call whose file_text leaked into description is repaired, and description refusals name the real problem
+
+`memory-core/src/tools/leaked-arguments.ts` (new) `repairLeakedArguments` runs at the top of `runMemoryTool`, so the Senpi tool and the writer child both get it. A model sometimes closes an argument with its own name (`</description>`) instead of `</parameter>`; the provider then reads on to the next `</parameter>`, so the following argument arrives inside it as `summary</description>\n<parameter name="file_text">body`. When the closing tag names the argument holding it and the leaked name is a known memory-tool text argument the call did not supply, the two values are split back apart (repeatedly, for a chain) and the tool result gains one `Note: 'file_text' arrived inside 'description' ...` line per repair; anything else is left as sent. `memfs/frontmatter-validation.ts` `describeDescriptionViolation` now checks tool-call scaffolding before the single-line and length checks, because a leaked body made every such call fail as `'description' exceeds 1024 characters (N)` and the model trimmed instead of resending (37 refusals in 12 days of local sessions, 5 retried into the same error). `memory-notice-spec.ts` `friendlyFailure` maps the scaffolding, length, single-line and empty-description refusals to plain sentences (`The description was 6,242 characters; the limit is 1,024.`); the regexes are unanchored because `memory_apply_patch` prefixes the file path. Tests: `leaked-arguments.test.ts`, `memory-description-rules.test.ts` (repair end to end, ambiguous leak over the limit names scaffolding, unknown argument refused), `frontmatter-strict-yaml.test.ts` (order), `memory-notice-spec.test.ts` (copy). Reverting the check order fails 2 tests; disabling the repair fails 1. omo#8774.
+
+## model profiles: unset `model_profile` runs `recommended`, served by ranked providers only (#8770)
+
+`components/model-profile/builtin-profiles.ts`: a builtin `recommended` profile (display name
+"Recommended", no family/tier, so it is not a lane) heads the table and is `DEFAULT_MODEL_PROFILE_ID`:
+claude-opus-5-5 medium -> claude-fable-5-1 xhigh -> kimi-k3 max -> gpt-6-astra xhigh -> gpt-6-sol
+medium -> glm-5.3 max, the same ladder as senpi's `RECOMMENDED_DEFAULT_MODELS` (senpi#2074), so the
+TUI (senpi's auto-switch) and the desktop/headless default (this component) start from one order.
+`BuiltinModelProfile.family`/`tier` become optional and `rankedProvidersOnly` is new.
+`resolve.ts`: a `rankedProvidersOnly` definition matches each rung against only its listed
+providers (`matchRankedRung` feeds the shared matcher a filtered registry), so the cross-provider step
+in `delegate-core` cannot reach a gateway aggregator's vendor-prefixed id
+(`opengateway/anthropic/claude-opus-5-5`). The four lanes keep that fallback. Tests: `index.test.ts`
+unset/blank -> recommended, gateway-only Opus -> kimi-coding K3, API + subscription Opus ->
+subscription, and a lane control that still takes the gateway; `builtin-profiles.test.ts` pins the
+chain; `scripts/qa/model-profile-e2e*` `unset`, `unset-skips-gateway`, and the known-profiles list.
+
 ## model profiles: the interactive TUI no longer applies `model_profile`
 
 `components/model-profile/index.ts`: `session_start` returns before any resolution when the event
