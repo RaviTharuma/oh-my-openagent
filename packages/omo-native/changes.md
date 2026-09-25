@@ -1,3 +1,53 @@
+## 2026-09-24 - omo doctor and omo setup report task-category coverage (#8858)
+
+### What changed
+
+- `bin/lib/category-coverage.js` (new): `engineAvailableModels` builds the pinned engine's `ModelRuntime` the way the engine's `auth-check --no-refresh` does (`ReadOnlyAuthStorage`, `InMemoryCodingAgentModelsStore`, `allowModelNetwork: false`) and returns `getAvailable()`; `anthropic-subscription` (an extension provider, not in the catalog) is registered on that runtime from the engine's own builtin extension, so the extension's availability check decides it as in a session (stored accounts, `CLAUDE_CODE_OAUTH_TOKEN*` env tokens, an opted-in ambient login; settings read from the inspected agent dir). A setup plan passes its post-import `auth.json` entries (in-memory `AuthStorage.inMemory`) and `models.json` document (a 0600 file in a temp dir removed right after). `categoryCoverage` classifies through the bundled runtime; `doctorCoverageLines` / `setupCoverage` are fail-open (no lines / `undefined`) and import the runtime before the engine so a payload without it costs nothing.
+- `category-coverage-entry.ts` (new): the bundled runtime. It loads omo.json the way the extension does (`loadOmoConfig`, harness `senpi`), counts setup's pending category pins as user-configured, and calls `resolveCategoryCoverage`.
+- `script/build-omo-native.ts`: bundles that entry into `plugin/runtime/category-coverage/index.js` (node target, ESM, node builtins only) and requires it in the payload completeness check (`NATIVE_REQUIRED_ARTIFACTS`; the omo-senpi install list is unchanged).
+- `bin/lib/launcher.js` computes the doctor lines (not for `--reap`) and passes them to `runDoctor`, which stays synchronous and prints them after the daemon line. `bin/lib/setup-import.js` computes the plan's coverage before the summary; `bin/lib/setup-summary.js` renders it as a `categories` row after the found rows.
+
+### Tests
+
+`test/category-coverage.test.ts` (new): the real engine and the real entry over a zai-only and an anthropic-only agent dir (1 and 7 usable, agent dir untouched), an env-token-only and a non-login `anthropic-subscription` entry, `runDoctor` printing the launcher's lines and `runSetup --dry-run` carrying the `categories` row, a setup plan whose imported key, custom provider and category pin all count, fail-open for doctor and setup (no `categories` row), and the line/row shape. `test/payload.test.ts` requires the new artifact.
+
+## 2026-09-24 - omo setup prints one migration summary and asks one consent for the whole plan (#8851)
+
+### What changed
+
+Every setup stage is now a pure plan builder plus a separate writer, so all plans exist before anything is asked or written:
+
+- `bin/lib/setup-credentials.js` (new; the credential stage moved out of `setup-import.js` unchanged): `planCredentials` / `applyCredentials`, plus `credentialPlanLines` (`planned-add`, `skipped-*`), `credentialCounts` (`imported: N`, `skipped-*: N`) and `credentialQuestion`.
+- `bin/lib/setup-assets-import.js`: `planAssets` / `applyAssets` replace `importOpencodeAssets`; the malformed-`mcp.json` warning becomes a plan notice. `setup-opencode-assets.js` `planOpencodeAssets` also returns `refusedServers` and `skippedSkills` (`{ name, reason }`) next to the notices it already pushed.
+- `bin/lib/setup-providers-import.js`: `planProviders` / `applyProviders` replace `importOpencodeProviders`. `applyProviders` re-reads `auth.json` before adding keys, since the credential stage of the same run may have just written it (its ids are builtin, these are custom, so the plan-time classification still holds). `setup-opencode-providers.js` also returns the declared ids it did not carry (`skipped`).
+- `bin/lib/setup-model-choices-import.js`: `planModelChoices` / `applyModelChoices` replace `importModelChoices`. The plan always validates against the providers the provider stage will add in this run (previously only a dry run did; a real run re-read models.json after the write, which holds the same providers). Dropped choices and blocked targets become plan notices with the same `model choice not carried: ...` / `WARN senpi: ...` text; the per-item `model choice <label>: ...` preview lines are gone.
+- `bin/lib/setup-guidance.js`: `credentialGuidance` returns structured OAuth logins (`login` / `signed-in` / `unsupported`, with the `/login` target) and unmapped ids instead of formatted text.
+- `bin/lib/setup-summary.js` (new): `formatSetupSummary` renders the inventory plus every plan (installed harnesses only; the notes of every stage de-duplicated, plus the detect notices of omo's own store) and holds `TELEMETRY_NOTICE`, copied word for word from omo-opencode `cli-installer.ts` / `tui-installer.ts`.
+- `bin/lib/setup-models.js`: only the guide line and the placeholder template remain; the template prints only when no class has anything to report.
+- `bin/lib/setup-import.js`: `runSetup` plans everything, prints the summary and the telemetry line once, then: `--dry-run` prints the `planned-*` lines and returns; nothing pending prints `Nothing new to import.` and the counts; otherwise one `[Y/n]` consent (Enter accepts) or, with `--ask-each`, the old per-stage `[y/N]` questions. A declined provider stage under `--ask-each` re-plans the model choices against the real models.json and prints the notices that changed. After the writes, one counts block for the stages that ran.
+
+`setup-report.js` (`formatSetupReport`) is unchanged: the launcher and the compiled entry still print it.
+
+### Tests
+
+`test/setup-summary.test.ts` (new): a PTY run pressing Enter imports every class behind one `[Y/n]` with no `[y/N]`, telemetry printed once, no uninstalled-harness names and no template; `--dry-run --yes` writes nothing and asks nothing; a non-interactive run refuses once and `--ask-each` refuses per class; a second run has nothing to consent to and changes no file. Layout-only updates elsewhere: the PTY marker is `[Y/n]`; asserts on `planned-*` lines in non-dry runs moved to the counters (`providers-imported: acme`, `providers-skipped-existing: 2`, `skills-skipped-bundled: 1`, `model-choices-carried: none`); the cache test asserts live provider ids and no `senpi | no` row; the guidance test asserts the structured result; the empty-plan shape includes `refusedServers` / `skippedSkills`.
+
+## 2026-09-24 - omo setup carries OpenCode model choices into settings.json and the [native] block (#8846)
+
+### What changed
+
+`bin/lib/setup-opencode-models.js` (new, read-only) reads opencode's `model`, `small_model` and `agent` through `readOpencodeConfig` - a whole-document variant `setup-opencode-assets.js` now exports next to `readOpencodeSection`, both built on one file reader - and the OpenCode edition's `categories` / `agents` from the legacy plugin files (`OPENCODE_CONFIG_DIR` before the global dir, `CONFIG_FILE_NAMES` order), overlaid by the `[opencode]` block of the user omo.json[c]. A legacy file the unification migration already moved is read from the newest `~/.omo/migration-backup-*-opencode-config/<path relative to home>` copy, with a notice naming it. Each `provider/model[:level]` (also the legacy `model(level)`) is translated with `provider-map.json` (for a provider opencode's auth.json holds as an OAuth login, `oauthLogins` first when that provider serves the model, so `openai/gpt-5.5` on a ChatGPT login becomes `chatgpt-subscription/gpt-5.5`) and checked against `bin/lib/engine-models.js` (new): the model ids of `@earendil-works/pi-ai/providers/all` `builtinProviders()`, the catalog model-runtime.js composes the engine from, loaded from the installed senpi without starting it; `anthropic-subscription` mirrors the anthropic catalog as its extension does; plus `<agentDir>/models.json` providers and, on a dry run, the custom providers the provider stage would add. A provider that lists models only at runtime (`refreshModels`) is reported, not trusted. Entries become the native shape: `model`, `models` (a `fallback_models` chain folded behind `model`), `reasoning` (from `reasoning` / `reasoningEffort` / `variant`) and `temperature`; an entry whose every model failed is dropped whole. Agents are carried only for names in senpi-task's `BUILTIN_AGENTS` (pinned by a test), because any other name would become a new promptless agent; `deep` is carried as `deep-low` as the loader canonicalizes it.
+
+`bin/lib/setup-model-choices-import.js` (new) is the stage, the same detect -> preview -> consent -> write shape and `confirm` as the others, run last in `runSetup`. Targets: `<agentDir>/settings.jsonc`, else `settings.json` (settings-manager.js `resolveSettingsSource`), `defaultProvider` + `defaultModel`; the user omo config (`omo.jsonc`, else `omo.json`, else a new `omo.jsonc`, loader/paths.ts) `[native]` block, or `[senpi]` when only that legacy spelling exists: `model_profile`, `categories.<name>`, `agents.<name>`. A key present in the block or the shared base is `skipped-existing`, or `already-carried` when equal. `bin/lib/jsonc-edit.js` (new) inserts each member into the file's own text, so comments and order survive, and refuses (the stage reports, writes nothing to that file) whenever the edited text does not parse back to exactly the intended document. Each edited file gets a `.bak-<timestamp>` copy and an atomic write through a symlink.
+
+### Why
+
+The engine starts an interactive session on the saved settings default (model-resolver.js `findInitialModel` step 3; recommended-models leaves a `settings` provenance alone), while the omo-senpi model-profile component applies Recommended to every fresh headless or desktop session unless `model_profile` is set, and a `provider/model` value there is a pin. Writing only one of the two left the other surface on Recommended.
+
+### Expected merge conflict zones
+
+`bin/lib/setup-import.js` `runSetup` (one added stage call), `bin/lib/setup-opencode-assets.js` (the reader split).
+
 ## 2026-09-24 - omo setup carries OpenCode custom providers into models.json and auth.json (#8836)
 
 ### What changed
