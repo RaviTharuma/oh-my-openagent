@@ -57,12 +57,10 @@ function mergeDeep(base, overlay) {
   return merged
 }
 
-/**
- * One top-level object section (`mcp`, `provider`) of the merged OpenCode config. `label` names
- * what a file that cannot be read costs, in its notice.
- */
-export function readOpencodeSection(files, section, label, notices) {
-  let declared = {}
+// Every existing file of `files` that parses to an object, in order. `label` names what a file
+// that cannot be read costs, in its notice.
+function readDocuments(files, label, notices) {
+  const documents = []
   for (const path of files) {
     if (!existsSync(path)) continue
     let parsed
@@ -76,9 +74,23 @@ export function readOpencodeSection(files, section, label, notices) {
       notices.push(`WARN opencode: ${path} is not an object; its ${label} were not imported`)
       continue
     }
+    documents.push(parsed)
+  }
+  return documents
+}
+
+/** One top-level object section (`mcp`, `provider`) of the merged OpenCode config. */
+export function readOpencodeSection(files, section, label, notices) {
+  let declared = {}
+  for (const parsed of readDocuments(files, label, notices)) {
     if (isPlainObject(parsed[section])) declared = mergeDeep(declared, parsed[section])
   }
   return declared
+}
+
+/** Every file of `files` deep-merged in order, later keys winning. */
+export function readOpencodeConfig(files, label, notices) {
+  return readDocuments(files, label, notices).reduce(mergeDeep, {})
 }
 
 // OpenCode substitutes `{env:NAME}`; the engine substitutes `${NAME}`. Same intent, same value.
@@ -154,19 +166,23 @@ function convertRemote(name, entry, notices) {
   }
 }
 
-function convertServer(name, entry, notices) {
+// A refused server is recorded with a short reason for the setup summary; the notice says what to do.
+function convertServer(name, entry, notices, refused) {
   if (entry === null || typeof entry !== "object") return undefined
   const config = entry.type === "remote" ? convertRemote(name, entry, notices) : convertLocal(entry)
   if (!config) {
     notices.push(`NOTICE opencode: mcp server ${name} has no usable command or url; not imported`)
+    refused.push({ name, reason: "no usable command or url" })
     return undefined
   }
   if (rejectedByEngine(config)) {
     notices.push(`NOTICE opencode: mcp server ${name} uses command substitution ($(...) or a leading !), which omo refuses to run; not imported - resolve it to a fixed value or a \${NAME} environment reference and add the server to mcp.json by hand`)
+    refused.push({ name, reason: "uses $(...) or a leading !" })
     return undefined
   }
   if (unconvertedPlaceholder(config)) {
     notices.push(`NOTICE opencode: mcp server ${name} uses a {file:...} or {env:...} placeholder omo cannot express; not imported - put the value in an environment variable and reference it as \${NAME} in mcp.json`)
+    refused.push({ name, reason: "uses a {file:...} or {env:...} placeholder" })
     return undefined
   }
   return config
@@ -180,7 +196,7 @@ function hasDescription(skillFile) {
   return frontmatter !== null && /^description:/m.test(frontmatter[1])
 }
 
-function readSkills(configDirs, notices) {
+function readSkills(configDirs, notices, skipped) {
   const skills = []
   for (const root of configDirs.flatMap((configDir) => [join(configDir, "skills"), join(configDir, "skill")])) {
     if (!existsSync(root)) continue
@@ -190,10 +206,12 @@ function readSkills(configDirs, notices) {
       const skillFile = join(source, "SKILL.md")
       if (!existsSync(skillFile)) {
         notices.push(`NOTICE opencode: skill ${entry.name} has no SKILL.md at its top level; not imported - copy it into the omo skills dir by hand if it holds nested skills`)
+        skipped.push({ name: entry.name, reason: "no SKILL.md" })
         continue
       }
       if (!hasDescription(skillFile)) {
         notices.push(`NOTICE opencode: skill ${entry.name} has no description in its SKILL.md frontmatter, so omo would not load it; not imported`)
+        skipped.push({ name: entry.name, reason: "no description in SKILL.md" })
         continue
       }
       if (skills.some((skill) => skill.name === entry.name)) continue
@@ -210,9 +228,12 @@ export function planOpencodeAssets(options = {}) {
   const sources = opencodeConfigSources(home, env)
   const notices = []
   const mcpServers = []
+  const refusedServers = []
   for (const [name, entry] of Object.entries(readOpencodeSection(sources.files, "mcp", "mcp servers", notices))) {
-    const converted = convertServer(name, entry, notices)
+    const converted = convertServer(name, entry, notices, refusedServers)
     if (converted) mcpServers.push({ name, config: converted })
   }
-  return { mcpServers, skills: readSkills(sources.directories, notices), notices }
+  const skippedSkills = []
+  const skills = readSkills(sources.directories, notices, skippedSkills)
+  return { mcpServers, refusedServers, skills, skippedSkills, notices }
 }
