@@ -1,3 +1,99 @@
+## 2026-09-30 - The recommended installer offers to remove a second omo install (#9324)
+
+After installing the standalone launcher, `install.sh` now verifies other `omo` entries on PATH against their package manifest or the previous standalone receipt. A terminal run asks `Remove the other omo install at <path>? [y/N]`; `--remove-other-installs` gives non-interactive runs an explicit opt-in, while piped and CI runs otherwise delete nothing and print the exact command. Removal is scoped to the verified global package and shim or the one receipt-owned launcher, and a failure leaves the new launcher working with remediation text. `omo doctor` now formats the non-active install's command with its detected Bun root, npm prefix, or quoted standalone path. The installer-channel behavior change is covered in throwaway HOME/prefix fixtures for acceptance, decline, failed-removal and look-alike safety cases.
+
+## 2026-10-01 - Validate computer-use status sources and passively report permissions (#9349)
+
+Status and doctor share installed-engine source selection and explicit-path validation.
+Missing, non-executable and quarantined overrides are no longer reported as found,
+and status retains the location after startup or failure. Before activation, status
+uses the existing bounded hello/capabilities probe on an installed engine: no
+acquisition, session opening, stop listener, input or permission prompt. Absent
+engines and failed probes report unknown permissions rather than claiming a grant.
+The probe deadline resolves independently of inherited pipe EOF and terminates
+the engine process tree, so a silent wrapper cannot leave status or doctor hanging.
+
+## 2026-10-01 - Preserve unsupported computer-use host diagnostics after first use (#9348)
+
+`/computer status` retains the installed-engine diagnostic after activation fails as
+native-unavailable. Unsupported linux-arm64 and win32-arm64 hosts continue naming
+the missing release build instead of losing the explanation after first use.
+Component regressions exercise the real activation failure and confirm status
+does not start another child or acquire an engine.
+
+## 2026-10-01 - the stop-path failure and permission-denied data types describe what they carry (#9338)
+
+Two type comments copied during the computer-use permission work described the wrong data. `StopPathFailure` (`crates/senpi-desktop-safety/src/supervisor.rs`) now says it records why the global stop-chord listener failed to start, which the gate uses to turn an Accessibility miss into a permission error instead of a missing stop path. `PermissionDeniedData` (`packages/senpi-desktop-protocol/src/json-rpc.ts`) now says it carries the missing macOS permission, the Settings pane that grants it, the app to enable and whether that app must be relaunched. These are comment-only changes; the generated extension bundles were refreshed because they embed the protocol package's doc comment.
+
+## 2026-10-01 - Permission errors name the macOS TCC responsible process (#9345)
+
+Screen Recording and Accessibility denial diagnostics resolve the responsible process with the
+macOS responsibility API and report its executable path, optional application bundle identifier,
+and pid. Shell-launched engines report themselves; application-launched engines report the
+responsible application. Failed resolution is explicitly unresolved and labels the engine path
+only as diagnostic context, never as a guessed TCC identity.
+
+## 2026-10-01 - ultrawork reuses evidence per target, spawns a new reviewer per round, and scopes defects to the blast radius (#9294)
+
+The directive's Constraints bullet ("own every defect met mid-run ... never deferred as a follow-up", from #7674)
+contradicted the engine's base prompt (a pre-existing bug is a follow-up) and the project's delivery rule (only defects
+inside the blast radius belong to this run), and the Codex variant still said "No drive-by refactors"; gate step 4 sent
+fixes back to the SAME reviewer while `review-work` and `ulw-execute` require a fresh one; "re-run the scenarios that
+increment could have affected" had no definition; and the rerun rule was stated three times. `SKILL.md`, `codex.md`,
+`default.md` (gate step only), the `ulw-loop` `add_subgoal` row and the `ulw-execute` discovered-work sentence now
+carry one scope rule (blast radius: request not delivered, regression this change introduces, invalid proof, failing test
+or stale doc of touched code; anything else becomes a tracked issue named in the final message), one rerun rule (evidence
+valid per target with commit and coverage recorded; rerun touched-file tests plus importers, their scenarios, and moved
+dependencies; one full pass before the final message) and a NEW reviewer per re-review (delta diff, cited blockers, at
+most twice). The memory line asks for every regression a check caught and each QA scenario with its invocation. No TDD
+wording returns. Generated copies (`generated-directive.ts`, `directive-content.ts`, `ulw-loop/directive.md`,
+`plugin/extensions/omo.js`) regenerated; `embed-directive.mjs --check` went RED on the edit and GREEN after regen, and
+`ultrawork-arming.test.ts` (packaged extension injects the directive) is the seam that fails on a stale bundle.
+
+## 2026-09-30 - Localized Windows tar month tokens parse during archive entry validation (#9289)
+
+Windows `tar -tvf` output can localize the month column or emit replacement characters when decoded. The tar listing parser now accepts any non-whitespace month token instead of only ASCII word characters, while malformed lines still fail closed and entry path validation remains unchanged. Regression coverage includes ASCII, Cyrillic, replacement-character, and malformed month/listing cases. Thanks @willowite for the report, reproduction, fix, and cases.
+
+## 2026-09-30 - Verify quarantined desktop-engine sidecars inside the launcher install (#9283)
+
+The locator accepts a quarantined executable sidecar only when its canonical path stays inside the
+launcher's native/prebuilds directory and its SHA-256 matches the as-shipped checksum file there.
+Missing, invalid or duplicate checksum entries, digest mismatches and escaping symlinks retain the
+quarantine refusal. Other candidate sources and explicit engine paths remain refused. Release
+acquisition and installed-sidecar verification share the existing checksum grammar; cache paths are
+unchanged.
+
+## 2026-09-30 - Adopt senpi 2026.9.30
+
+Every `@code-yeongyu/senpi` pin moves from 2026.9.29-5 to 2026.9.30: the root devDependency, `omo-native`, the `omo-senpi`
+and `senpi-task` peer and dev pins (with their `@earendil-works/pi-tui` -> `@code-yeongyu/senpi-tui` aliases), the pin
+tests, the version comment in `provider-map.json` and the engine named in `senpi-task`'s category coverage test. The
+engine brings the ask-user resume crash fix (#9268), the `accept-edits` permission preset (senpi#2430), the chat prompt
+surface (senpi#2398) and the terminal control-endpoint answer fix the session gateway needs (senpi#2407).
+
+## 2026-09-30 - Keep signed macOS computer-use engines at one path across updates (#9282)
+
+Signed release engines now launch from `~/.omo/engines/senpi-desktop-engine/<host>/senpi-desktop-engine`,
+so the absolute-path part of a macOS Accessibility or Screen Recording grant does not change on update.
+Every service spawn reacquires its requested release and holds a process-safe exclusive lock through
+atomic replacement, SHA-256 verification and native spawn. Concurrent sessions cannot replace the image
+between another session's verification and spawn. Doctor uses the same transaction and reports that path.
+Explicit overrides, sidecars, development engines, unsigned builds and quarantine diagnostics retain their
+existing behavior; unsigned files never replace the permission-bearing release engine. Other platforms
+retain immutable release generations.
+
+## 2026-09-30 - Computer-use status and doctor report installed sources and unsupported hosts (#9286)
+
+`/computer status` describes the located engine or verified release cache without starting it, or names the release asset that first use would download. Headless print mode emits the same status on stderr instead of losing the UI notification. Doctor now probes verified cached engines without fetching and reports the same source location as status, with a separate launched-executable field when signed launch uses a stable path. Empty unsupported hosts report that no engine is built instead of suggesting a download. The cache scan retains its existing layout, digest, quarantine and executable checks, including attempted paths when a cache read fails. The computer tool and guide require current-session capabilities before an availability claim.
+
+## 2026-09-30 - macOS permission denials identify the app and preserve their cause (#9284)
+
+A failed Accessibility stop listener now stays a permission denial through the supervisor, session,
+engine RPC and computer tool, including the default-policy path where only the host relay is live.
+Input remains refused; suspension and heartbeat precedence and the relay-only opt-in are preserved.
+Denied macOS actions open each permission's Settings pane once per engine process and return the
+launching app, pane URL and relaunch requirement. Capture remains independent of Accessibility.
+
 ## 2026-09-30 - The standalone binary gate starts the binary from an empty download folder and runs a Windows leg (#7485)
 
 `native-binary-parity` (#9259) ran the binary where `build-omo-binary.ts` wrote it, and only on macOS, so the Windows
