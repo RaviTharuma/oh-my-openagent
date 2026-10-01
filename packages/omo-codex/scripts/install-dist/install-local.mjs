@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// omo-codex-install:76bfd9555dc0f5ee104bb34f42f75e7c52948d77356eed6b57e7b57738df399f:1745be8f0e5a6fbaa5f97e2df68fa6cecf8bb9b22d612762cf912b589505c6b7
+// omo-codex-install:9ce82ca8ea35b7f55d033dcb0acd14a098a478e84a5c3f379b5b5ab565db4339:d60a07b426409b11b9349ed932b64f7e5662b9d4c520b65c53c255d36f964972
 var __esm = (fn, res, err) => () => {
   if (fn)
     try {
@@ -9984,7 +9984,7 @@ var package_default;
 var init_package = __esm(() => {
   package_default = {
     name: "@oh-my-opencode/omo-codex",
-    version: "5.1.5",
+    version: "5.1.7",
     type: "module",
     private: true,
     description: "Codex harness adapter for oh-my-openagent. Vendored Codex plugin namespace (omo) + TypeScript installer + telemetry.",
@@ -12529,6 +12529,12 @@ ${featureName} = true
   }
   return replaceOrInsertSetting(config, section, featureName, "true");
 }
+function removeFeature(config, featureName) {
+  const section = findTomlSection(config, "features");
+  if (section !== null)
+    return removeSetting(config, section, featureName);
+  return removeRootSetting(config, `features.${featureName}`);
+}
 
 // packages/omo-codex/src/install/codex-config-marketplaces.ts
 var SISYPHUS_LEGACY_MARKETPLACES = ["lazycodex", "code-yeongyu-codex-plugins"];
@@ -13121,6 +13127,7 @@ async function updateCodexConfig(input) {
   config = ensureFeatureEnabled(config, "plugins");
   config = ensureFeatureEnabled(config, "plugin_hooks");
   config = ensureFeatureEnabled(config, "multi_agent");
+  config = removeFeature(config, "child_agents_md");
   config = removeUnsupportedCodexMultiAgentModeConfig(config);
   config = ensureCodexReasoningConfig(config, applyReasoningOverride(await readCodexModelCatalog(input.repoRoot), input.reasoning));
   config = ensureCodexMultiAgentV2Config(config, {
@@ -19442,7 +19449,8 @@ var OmoMemoryRecallSchema = object({
   event_caps: OmoMemoryRecallEventCapsSchema.default({ tool_args: 400, result_head: 600, assistant: 1500, prompt: 4000 }),
   sidecar_max_tokens: number2().int().positive().default(48000),
   max_concurrent_wakes: number2().int().positive().default(2),
-  tool_budget: number2().int().positive().default(8)
+  tool_budget: number2().int().positive().default(8),
+  query_expansion: boolean2().default(false)
 }).strict();
 var OmoMemoryNudgeSchema = object({
   enabled: boolean2().default(true),
@@ -19503,7 +19511,8 @@ var OmoMemoryRecallLayerSchema = object({
   event_caps: OmoMemoryRecallEventCapsLayerSchema.optional(),
   sidecar_max_tokens: number2().int().positive().optional(),
   max_concurrent_wakes: number2().int().positive().optional(),
-  tool_budget: number2().int().positive().optional()
+  tool_budget: number2().int().positive().optional(),
+  query_expansion: boolean2().optional()
 }).strict();
 var OmoMemoryNudgeLayerSchema = object({
   enabled: boolean2().optional(),
@@ -19580,7 +19589,8 @@ var OmoMemorySettingsSchema = object({
     event_caps: { tool_args: 400, result_head: 600, assistant: 1500, prompt: 4000 },
     sidecar_max_tokens: 48000,
     max_concurrent_wakes: 2,
-    tool_budget: 8
+    tool_budget: 8,
+    query_expansion: false
   }),
   compile_warn_tokens: number2().int().positive().default(30000),
   agents: record(string2(), OmoMemoryAgentOverridesSchema).default({})
