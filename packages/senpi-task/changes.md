@@ -1,3 +1,38 @@
+## 2026-10-01 - In-process task children honor the caller's settings (#9353)
+
+- `runners/in-process/runtime-fallback-settings.ts` `createRuntimeFallbackSettings` now takes the caller's settings source (`cwd`, `agentDir`, `projectTrusted`) and gives the child a private in-memory copy of the caller's global and project settings, replacing only the fallback policy: `retry.modelFallback`, `retry.fallbackChains` and `retry.fallbackRevertPolicy` come from the child's own chain, and the child's `maxRetries`/`baseDelayMs` override wins over both caller scopes. Before, the child got an in-memory manager holding only that policy (#6478), so `retry.provider.streamStartTimeoutMs`, `retry.provider.timeoutMs`, `httpIdleTimeoutMs`, `compaction.*` and `thinkingBudgets` fell back to the engine defaults (a 300 s first-event guard and a 300 s request idle timeout). Children now also honor the caller's compaction and thinking settings, matching process children.
+- The project layer reaches the child only when the parent session trusted the project: `ChildSpec.projectTrusted` comes from the parent's `ctx.isProjectTrusted()` through `InProcessSessionContext`; an unknown decision counts as untrusted. Child writes stay in the in-memory copy, so the caller's settings files are never written.
+- `in-process-caller-settings.test.ts` drives a real child through `InProcessRunner`: a caller `streamStartTimeoutMs` of 150 ms cuts a silent provider at 150 ms (on the base the guard never fired within 10 s), the request carries the caller's `httpIdleTimeoutMs` (base: 300000), a caller fallback chain is never used by a child without its own chain, a child with its own chain falls back only to it, and the caller's settings file stays byte-identical.
+
+## 2026-10-01 - Repeated Bun Windows advisories remain external termination output (#9228)
+
+- `runners/rpc/exit-mapping.ts` accepts any positive number of known Bun child-reaper startup advisory lines in the Windows exit-code-1/no-signal case. A different stderr line still classifies the child as crashed.
+- Focused cases pin N advisory-only lines to `killed: true` and advisory lines plus one real error to `crashed`.
+
+## 2026-10-01 - Windows child parity regression (#9274, #6709)
+
+- `builtin-tool-parity.integration.test.ts` reloads the in-process child loader beside the `DefaultResourceLoader` policy used by process children and compares their builtin registrations directly. This removes both Windows CLI cold starts while pinning equal platform-specific builtin counts, exact names, and `web_search`; shared parent and session-default tool policy remains covered by the existing surface tests.
+
+## 2026-09-30 - In-process task children load senpi's builtin tools (#9274, #6709)
+
+- `runners/in-process/child-loader.ts` now uses senpi's `DefaultResourceLoader` with every path-loaded extension and resource disabled, so in-process children receive the same builtin extension factories as process children without re-running the parent's omo-senpi or project extensions. The child binds the loaded extensions so model-aware variants settle before its first request, keeps process-mode's `--no-ask-user` flag, and preserves category/agent allow and deny policy. Shared task/workpool tools now follow process mode; lead-only workflow/team and question tools remain excluded.
+- `builtin-tool-parity.integration.test.ts` drives both execution modes through a local OpenAI-compatible provider and compares the actual tool payloads. Before the fix the in-process child had 11 tools versus 27 in process mode and lacked `web_search`; after bundle regeneration both payloads are identical.
+
+## 2026-10-01 - deep-high runs GPT-6 Astra at high (#9372)
+
+- `category/fallback-chains.ts` `deep-high` and `category/openai-categories.ts` (builtin default
+  `chatgpt-subscription/gpt-6-astra`): variant `high` (was `xhigh`). The chain stays one Astra rung on all four GPT lanes and the
+  gate stays `gpt-6-astra`, so the two deep lanes still never substitute each other's model.
+- Tests that pinned `xhigh` for deep-high (`fallback-chains`, `openai-categories`, `openai-lane`, `gating`, `resolve-category`)
+  now expect `high`.
+- `manager/credential-failure.ts` `terminalFailureMessage`: a task that ends on a spent usage limit no longer ends on the bare
+  provider error. The text adds `<provider>/<model> reached its usage limit, so this task stopped.`, then
+  `No other model in its fallback chain could take over.` when `runtimeFallbackCandidates` leaves nothing (a deep-high child
+  whose every Astra lane is spent), then the recovery: retry after the reset or point the category elsewhere in omo.json. A
+  live deep-high run against a ChatGPT-subscription Astra that answers `access_terminated_error` returns exactly that text to
+  the parent. `credential-failure.test.ts` covers the exhausted chain, a limit with rungs left (no exhaustion claim) and an
+  ordinary error (unchanged).
+
 ## 2026-09-30 - The foreground task wait is bounded at 900 s (#8759 cluster, senpi#2323)
 
 - `tools/task/foreground-wait.ts` `waitForForegroundTask`: the wait before a foreground child is promoted to background
