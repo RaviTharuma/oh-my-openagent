@@ -100,11 +100,13 @@ export type TaskAwaitingInput = {
 }
 
 export type HostSessionIdentity = {
+  readonly effect_seq?: number
   readonly socket: string
   readonly routing_id: string
   readonly session_path: string
   readonly instance_id: string
   readonly daemon_pid?: number
+  readonly adopted_entry_id?: string
 }
 
 export type ResolvedModelRecord = {
