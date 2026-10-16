@@ -4,6 +4,10 @@ export type GatewayInferenceTelemetry = {
   model?: string
 }
 
+type MessagePart = {
+  metadata?: Record<string, unknown>
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -23,40 +27,65 @@ function readPositiveNumber(value: unknown): number | undefined {
   return parsed
 }
 
+function findGatewayUsageFromParts(parts: unknown): Record<string, unknown> | undefined {
+  if (!Array.isArray(parts)) return undefined
+  
+  for (const part of parts) {
+    if (!isRecord(part)) continue
+    if (!isRecord(part.metadata)) continue
+    
+    if (isRecord(part.metadata.usage)) return part.metadata.usage
+    if (isRecord(part.metadata.omniroute)) return part.metadata.omniroute
+    if (isRecord(part.metadata.gateway)) return part.metadata.gateway
+  }
+  
+  return undefined
+}
+
 export function preferGatewayInferenceTelemetry(message: {
   info?: Record<string, unknown>
+  parts?: MessagePart[]
 }): GatewayInferenceTelemetry {
   const info = message.info ?? {}
-  const usage = isRecord(info.usage) ? info.usage : {}
-  const cost =
-    readFiniteNumber(usage.cost) ??
-    readFiniteNumber(info.cost)
+  
+  const infoUsage = isRecord(info.usage) ? info.usage : undefined
+  const partsUsage = findGatewayUsageFromParts(message.parts)
+  const usage = infoUsage ?? partsUsage
+  
+  if (!usage) {
+    return {}
+  }
+  
   const tokensPerSecond =
     readPositiveNumber(usage.tokens_per_second) ??
-    readPositiveNumber(usage.tokensPerSecond) ??
-    readPositiveNumber(info.tokens_per_second)
-  const model =
-    (typeof usage.model === "string" && usage.model.trim() ? usage.model.trim() : undefined) ??
-    (typeof info.modelID === "string" && info.modelID.trim() ? info.modelID.trim() : undefined)
+    readPositiveNumber(usage.tokensPerSecond)
+  
+  if (tokensPerSecond === undefined) {
+    return {}
+  }
+  
+  const cost = readFiniteNumber(usage.cost)
+  const model = typeof usage.model === "string" && usage.model.trim() 
+    ? usage.model.trim() 
+    : undefined
+  
   const out: GatewayInferenceTelemetry = {}
   if (cost !== undefined && cost >= 0) out.costUsd = cost
-  if (tokensPerSecond !== undefined) out.tokensPerSecond = tokensPerSecond
+  out.tokensPerSecond = tokensPerSecond
   if (model) out.model = model
   return out
 }
 
 export function formatGatewayTelemetryLine(telemetry: GatewayInferenceTelemetry): string {
-  if (
-    telemetry.costUsd === undefined &&
-    telemetry.tokensPerSecond === undefined &&
-    telemetry.model === undefined
-  ) {
+  if (telemetry.tokensPerSecond === undefined) {
     return ""
   }
-  const cost =
-    telemetry.costUsd === undefined ? "cost —" : `cost $${telemetry.costUsd}`
-  const tps =
-    telemetry.tokensPerSecond === undefined ? "tok/s —" : `tok/s ${telemetry.tokensPerSecond}`
+  
+  const cost = telemetry.costUsd !== undefined 
+    ? `cost $${telemetry.costUsd.toFixed(4)}` 
+    : "cost n/a"
+  const tps = `tok/s ${telemetry.tokensPerSecond.toFixed(1)}`
   const model = telemetry.model ? `model ${telemetry.model}` : undefined
+  
   return [cost, tps, model].filter(Boolean).join(" · ")
 }

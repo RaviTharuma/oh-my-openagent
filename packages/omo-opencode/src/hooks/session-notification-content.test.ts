@@ -72,6 +72,50 @@ describe("buildReadyNotificationContent", () => {
 
       expect(result.message).toContain("cost $0.0123 · tok/s 80.5 · model winner-model")
     })
+    
+    test("#when last assistant has only OpenCode fields and no gateway data #then no gateway line", async () => {
+      const ctx = {
+        directory: "/tmp/test",
+        client: {
+          session: {
+            get: async () => ({ data: { title: "Regular session" } }),
+            messages: async () => ({
+              data: [
+                {
+                  info: { role: "user" },
+                  parts: [{ type: "text", text: "help" }],
+                },
+                {
+                  info: {
+                    role: "assistant",
+                    cost: 0.15,
+                    modelID: "claude-sonnet-4",
+                    providerID: "anthropic",
+                    tokens: {
+                      input: 1000,
+                      output: 500,
+                      reasoning: 0,
+                      cache: { read: 0, write: 0 },
+                    },
+                  },
+                  parts: [{ type: "text", text: "Here is the answer" }],
+                },
+              ],
+            }),
+          },
+        },
+      }
+
+      const result = await buildReadyNotificationContent(ctx, {
+        sessionID: "ses_456",
+        baseTitle: "OpenCode",
+        baseMessage: "Agent is ready",
+      })
+
+      expect(result.message).not.toContain("cost $")
+      expect(result.message).not.toContain("tok/s")
+      expect(result.message).toBe("Agent is ready\nUser: help\nAssistant: Here is the answer")
+    })
   })
 
   describe("#given session APIs do not provide rich data", () => {
