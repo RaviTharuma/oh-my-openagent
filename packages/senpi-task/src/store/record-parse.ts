@@ -9,6 +9,7 @@ import { AWAITING_INPUT_REASONS } from "../state/types"
 import { parseTaskId } from "../state/id"
 import {
   parseNotification,
+  parseOptionalEffectiveModel,
   parseOptionalIsolation,
   parseOptionalHostSession,
   parseOptionalOwner,
@@ -76,7 +77,7 @@ export function parseTaskRecord(value: unknown, path: string, warnings?: string[
   const fallbackAttempts = parseOptionalResolvedModelArray(value, "fallback_attempts")
   const resolvedModel = parseOptionalResolvedModel(value, "resolved_model")
   const resolvedTier = isRecord(value["resolved_model"]) ? readOptionalString(value["resolved_model"], "service_tier") : undefined
-  const effectiveModel = parseOptionalResolvedModel(value, "effective_model")
+  const effectiveModel = parseOptionalEffectiveModel(value)
   const effectiveTier = isRecord(value["effective_model"]) ? readOptionalString(value["effective_model"], "service_tier") : undefined
   const spawnSpec = parseOptionalSpawnSpec(value)
   const owner = parseOptionalOwner(value)
@@ -95,6 +96,8 @@ export function parseTaskRecord(value: unknown, path: string, warnings?: string[
   const revivalDeferredReason = readOptionalString(value, "revival_deferred_reason")
   const recoveryDeadlineAt = readOptionalNumber(value, "recovery_deadline_at")
   const failureKind = readOptionalTaskStartFailureKind(value)
+  // An unknown cause (a newer build's) is dropped: the record still parses and the interrupt stays silent.
+  const interruptCause = value.interrupt_cause === "session_replaced" ? "session_replaced" : undefined
   const failureReason = readOptionalTaskStartFailureReason(value)
   const hostSession = parseOptionalHostSession(value)
   validateHostSessionConsistency(runnerKind, hostSession)
@@ -157,6 +160,7 @@ export function parseTaskRecord(value: unknown, path: string, warnings?: string[
     ...(stopReason === undefined ? {} : { stop_reason: stopReason }),
     ...(deadline === undefined ? {} : { deadline }),
     ...(failureKind === undefined ? {} : { failure_kind: failureKind }),
+    ...(interruptCause === undefined ? {} : { interrupt_cause: interruptCause }),
     ...(failureReason === undefined ? {} : { failure_reason: failureReason }),
     ...(killed === undefined ? {} : { killed }),
     ...(runStats === undefined ? {} : { run_stats: runStats }),
