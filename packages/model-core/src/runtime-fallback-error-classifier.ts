@@ -219,8 +219,8 @@ export function isRuntimeFallbackRetryableError(
     }
 
     const authExpiredPattern = /auth(?:entication)?(?:\s+has)?\s+expired/i
-    if (authExpiredPattern.test(message)) {
-      return statusCode === 401 && retryOnErrors.includes(401)
+    if (authExpiredPattern.test(message) && statusCode === 401 && retryOnErrors.includes(401)) {
+      return true
     }
   }
 

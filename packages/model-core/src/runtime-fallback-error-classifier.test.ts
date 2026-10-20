@@ -547,6 +547,21 @@ describe("OpenCode UnknownError scoping (fixes #7706)", () => {
     expect(results).toEqual([true, true, true])
   })
 
+  test("auth-expired UnknownError with overload text and no status MUST hop", () => {
+    //#given
+    const error = {
+      name: "UnknownError",
+      providerID: "anthropic",
+      message: "Authentication has expired; upstream server_is_overloaded",
+    }
+
+    //#when
+    const retryable = isRuntimeFallbackRetryableError(error, DEFAULT_RETRY_CODES)
+
+    //#then
+    expect(retryable).toBe(true)
+  })
+
   test("does not treat UnknownError programming failures as retryable", () => {
     //#given
     const error = {
